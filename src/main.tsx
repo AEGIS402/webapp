@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import { AuditModalProvider } from './state/auditModal'
@@ -10,7 +10,7 @@ import { WalletProvider } from './state/wallet'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <HashRouter>
       <WalletProvider>
         <EscrowHistoryProvider>
           <AuditHistoryProvider>
@@ -21,6 +21,6 @@ createRoot(document.getElementById('root')!).render(
           </AuditHistoryProvider>
         </EscrowHistoryProvider>
       </WalletProvider>
-    </BrowserRouter>
+    </HashRouter>
   </StrictMode>
 )
