@@ -54,7 +54,7 @@ export function Sidebar() {
       {/* Bottom */}
       <div style={{ padding: '12px 14px', borderTop: '1px solid #2D1F5E', flexShrink: 0 }}>
         <p style={{ fontSize: 9, color: '#9B8EC4', marginBottom: 2 }}>jawgstar.eth</p>
-        <span style={{ fontSize: 8, color: '#5A4A8A' }}>Base · Pro</span>
+        <span style={{ fontSize: 8, color: '#5A4A8A' }}>Sepolia · Pro</span>
       </div>
     </div>
   )

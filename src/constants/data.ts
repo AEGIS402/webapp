@@ -217,7 +217,7 @@ export const HOOK_DATA = [
     color: '#A8FF3E',
     perms: ['BEFORE_SWAP', 'AFTER_SWAP'],
     permColors: ['#A8FF3E', '#A8FF3E'],
-    network: 'Base', version: 'v1.2.0', txCount: '142 txs',
+    network: 'Sepolia', version: 'v1.2.0', txCount: '142 txs',
   },
   {
     id: 'slip',
@@ -227,7 +227,7 @@ export const HOOK_DATA = [
     color: '#A8FF3E',
     perms: ['AFTER_SWAP'],
     permColors: ['#A8FF3E'],
-    network: 'Base', version: 'v0.9.1', txCount: '38 txs',
+    network: 'Sepolia', version: 'v0.9.1', txCount: '38 txs',
   },
   {
     id: 'router',
@@ -237,7 +237,7 @@ export const HOOK_DATA = [
     color: '#FFE600',
     perms: ['BEFORE_SWAP', 'MODIFY_LP'],
     permColors: ['#A8FF3E', '#FFE600'],
-    network: 'Base', version: 'v2.0.0', txCount: '7 txs',
+    network: 'Sepolia', version: 'v2.0.0', txCount: '7 txs',
   },
   {
     id: 'test',
@@ -247,6 +247,6 @@ export const HOOK_DATA = [
     color: '#5A4A8A',
     perms: ['BEFORE_SWAP'],
     permColors: ['#5A4A8A'],
-    network: 'Base Sepolia', version: 'v0.1.0', txCount: '0 txs',
+    network: 'Sepolia', version: 'v0.1.0', txCount: '0 txs',
   },
 ]

@@ -34,7 +34,7 @@ export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
           padding: '2px 8px', borderRadius: 3, border: '1px solid #378ADD',
           background: 'rgba(55,138,221,0.12)', color: '#378ADD',
           fontFamily: "'Press Start 2P', monospace", fontSize: 7,
-        }}>Base</span>
+        }}>Sepolia</span>
       </div>
 
       {/* Address */}

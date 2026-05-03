@@ -56,7 +56,7 @@ export function HookGrid() {
         <div style={{ padding: 14, display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 16 }}>
           <div>
             <Label>REGISTRATION</Label>
-            {[['address','0xUniV4Hook...a2c','#7F77DD'],['network','Base','#378ADD'],['version','v1.2.0','#F2E7FF'],['registered','2026-04-28','#9B8EC4'],['tx count','142','#A8FF3E']].map(([k,v,c]) => (
+            {[['address','0xUniV4Hook...a2c','#7F77DD'],['network','Sepolia','#378ADD'],['version','v1.2.0','#F2E7FF'],['registered','2026-04-28','#9B8EC4'],['tx count','142','#A8FF3E']].map(([k,v,c]) => (
               <div key={k} style={{ fontSize: 9, marginBottom: 3 }}>
                 <span style={{ color: '#5A4A8A' }}>{k}: </span><span style={{ color: c }}>{v}</span>
               </div>

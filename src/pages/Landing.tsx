@@ -81,7 +81,7 @@ export function Landing() {
                     ))}
                   </div>
                   <div style={{ fontSize: 7, lineHeight: 1.7 }}>
-                    <div style={{ color: '#A8FF3E' }}>✓ 402 recv — 0.001 USDC · Base</div>
+                    <div style={{ color: '#A8FF3E' }}>✓ 402 recv — 0.001 USDC · Sepolia</div>
                     <div style={{ color: '#378ADD' }}>→ Contract audit — LLM cache...</div>
                   </div>
                 </div>

@@ -48,7 +48,7 @@ const CONFIGS: Record<OverviewState, MonitorCardConfig> = {
     nodes: ['done', 'active', 'wait', 'wait'],
     connectors: ['green', 'blue', 'gray'],
     logs: [
-      { ts: '02:14:33', text: '✓ 402 received — amount: 0.001 USDC · token: USDC · network: Base', color: '#A8FF3E' },
+      { ts: '02:14:33', text: '✓ 402 received — amount: 0.001 USDC · token: USDC · network: Sepolia', color: '#A8FF3E' },
       { ts: '',         text: '   payTo: 0xWeatherAPI...f3d · resource: /api/weather · expiresAt: +30s', color: '#5A4A8A' },
       { ts: '02:14:34', text: '→ Contract audit — querying local LLM cache...', color: '#378ADD' },
       { ts: '',         text: '   hook: 0xUniV4Hook...a2c · checking bytecode + permission flags', color: '#5A4A8A' },
@@ -60,7 +60,7 @@ const CONFIGS: Record<OverviewState, MonitorCardConfig> = {
     nodes: ['done', 'block', 'wait', 'wait'],
     connectors: ['green', 'red', 'gray'],
     logs: [
-      { ts: '02:14:33', text: '✓ 402 received — amount: 0.001 USDC · token: USDC · network: Base', color: '#A8FF3E' },
+      { ts: '02:14:33', text: '✓ 402 received — amount: 0.001 USDC · token: USDC · network: Sepolia', color: '#A8FF3E' },
       { ts: '',         text: '   payTo: 0xWeatherAPI...f3d · resource: /api/weather · expiresAt: +30s', color: '#5A4A8A' },
       { ts: '02:14:34', text: '✕ Contract audit FAILED — hook permission mismatch', color: '#FF4444' },
       { ts: '',         text: '   MODIFY_LP not declared in x402 requirement', color: '#FF4444' },
