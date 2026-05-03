@@ -7,18 +7,17 @@ const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`
 interface Props {
   selectedId: string | null
   onSelect: (id: string) => void
-  showExample: boolean
-  onToggleExample: (v: boolean) => void
 }
 
-export function EscrowList({ selectedId, onSelect, showExample, onToggleExample }: Props) {
+export function EscrowList({ selectedId, onSelect }: Props) {
   const { entries, clear } = useEscrowHistory()
 
-  const exampleEntries: EscrowHistoryEntry[] = showExample
-    ? ([
+  // Always populate with example entries when no live entries exist.
+  const exampleEntries: EscrowHistoryEntry[] = entries.length === 0
+    ? [
         toExampleEntry(ESCROW_FIXTURES.sandwich),
         toExampleEntry(ESCROW_FIXTURES.normal),
-      ])
+      ]
     : []
 
   const allEntries = entries.length > 0 ? entries : exampleEntries
@@ -49,7 +48,7 @@ export function EscrowList({ selectedId, onSelect, showExample, onToggleExample 
           border: '1px solid #2D1F5E',
           background: 'rgba(127,119,221,0.08)',
         }}>
-          {entries.length}
+          {allEntries.length}
         </span>
         <span style={{ flex: 1 }} />
         {entries.length > 0 && (
@@ -67,61 +66,17 @@ export function EscrowList({ selectedId, onSelect, showExample, onToggleExample 
         )}
       </div>
 
-      {entries.length === 0 && (
-        <ToggleExample value={showExample} onChange={onToggleExample} />
-      )}
-
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {allEntries.length === 0 ? (
-          <EmptyState />
-        ) : (
-          allEntries.map((e) => (
-            <Row
-              key={e.id}
-              entry={e}
-              selected={selectedId === e.id}
-              onClick={() => onSelect(e.id)}
-              isExample={entries.length === 0}
-            />
-          ))
-        )}
+        {allEntries.map((e) => (
+          <Row
+            key={e.id}
+            entry={e}
+            selected={selectedId === e.id}
+            onClick={() => onSelect(e.id)}
+            isExample={entries.length === 0}
+          />
+        ))}
       </div>
-    </div>
-  )
-}
-
-function ToggleExample({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '8px 14px',
-      borderBottom: '1px solid #2D1F5E',
-      cursor: 'pointer',
-    }}>
-      <input
-        type="checkbox"
-        checked={value}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: '#FFE600', cursor: 'pointer' }}
-      />
-      <span style={{
-        fontFamily: "'Press Start 2P', monospace", fontSize: 6,
-        color: value ? '#FFE600' : '#5A4A8A', letterSpacing: '0.1em',
-      }}>
-        SHOW EXAMPLE DATA
-      </span>
-    </label>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div style={{
-      padding: '24px 18px',
-      fontSize: 11, color: '#5A4A8A', lineHeight: 1.6,
-      textAlign: 'center',
-    }}>
-      No escrows yet. Run <span style={{ color: '#FF8A4D' }}>SCENARIO 2-3</span> on the Overview page, or toggle <span style={{ color: '#FFE600' }}>SHOW EXAMPLE DATA</span> above to preview.
     </div>
   )
 }

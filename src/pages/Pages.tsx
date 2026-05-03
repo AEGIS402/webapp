@@ -82,10 +82,9 @@ interface EscrowLocationState {
 export function EscrowPage() {
   const location = useLocation()
   const { entries, getById } = useEscrowHistory()
-  const [showExample, setShowExample] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // On mount or state change, prefer router-state entryId, then first real entry, then example
+  // Prefer router-state entryId → first live entry → first example.
   useEffect(() => {
     const stateId = (location.state as EscrowLocationState | null)?.entryId
     if (stateId && getById(stateId)) {
@@ -96,10 +95,8 @@ export function EscrowPage() {
       setSelectedId(entries[0].id)
       return
     }
-    if (showExample) {
-      setSelectedId('example-sandwich')
-    }
-  }, [location.state, entries, showExample, getById])
+    setSelectedId('example-sandwich')
+  }, [location.state, entries, getById])
 
   const selectedEntry: EscrowHistoryEntry | null = selectedId
     ? getById(selectedId) ?? exampleById(selectedId)
@@ -127,8 +124,6 @@ export function EscrowPage() {
         <EscrowList
           selectedId={selectedId}
           onSelect={setSelectedId}
-          showExample={showExample}
-          onToggleExample={setShowExample}
         />
         <div style={{ overflowY: 'auto', minHeight: 0 }}>
           <EscrowDetailView entry={selectedEntry} />

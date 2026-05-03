@@ -5,7 +5,6 @@ import {
   POST_AUDIT_CHAIN_ID, SEPOLIA_EXPLORER,
 } from '../../constants/data'
 import { auditTx } from '../../api/postaudit'
-import { POSTAUDIT_MOCK_NORMAL, POSTAUDIT_MOCK_SANDWICH } from '../../data/postaudit-mocks'
 import { PostAuditReport, Severity } from '../../types/postaudit'
 import { MonitorCard, MonitorCardConfig, LogLine } from './MonitorCard'
 import { useAuditModal } from '../../state/auditModal'
@@ -17,12 +16,10 @@ const tsNow = () => new Date().toTimeString().slice(0, 8)
 const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`
 
 const responseCache = new Map<string, PostAuditReport>()
-const cacheKey = (target: PostAuditTarget, useMock: boolean) =>
-  `${useMock ? 'mock' : 'live'}:${target.txHash}`
+const cacheKey = (target: PostAuditTarget) => `live:${target.txHash}`
 
 export function Demo2Runner() {
   const [target, setTarget] = useState<PostAuditTarget>(POST_AUDIT_TARGETS[1])  // sandwich first by default
-  const [useMock, setUseMock] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [logs, setLogs] = useState<LogLine[]>([])
   const [result, setResult] = useState<PostAuditReport | null>(null)
@@ -83,7 +80,7 @@ export function Demo2Runner() {
     const startedAt = performance.now()
     const elapsed = () => Math.round((performance.now() - startedAt) / 1000)
 
-    const cached = responseCache.get(cacheKey(target, useMock))
+    const cached = responseCache.get(cacheKey(target))
 
     modal.show({
       phase: 'running', mode: 'post',
@@ -128,16 +125,14 @@ export function Demo2Runner() {
     try {
       const res = cached
         ? await replayCached(cached)
-        : useMock
-          ? await mockAudit(target)
-          : await auditTx(target.txHash, { signal: controller.signal })
+        : await auditTx(target.txHash, { signal: controller.signal })
 
       if (controller.signal.aborted) return
       clearAllTimers()
       const finalElapsed = elapsed()
       setElapsedSec(finalElapsed)
 
-      responseCache.set(cacheKey(target, useMock), res)
+      responseCache.set(cacheKey(target), res)
       setResult(res)
       setPhase('done')
       modal.finishPost(subjectMeta(target), res, finalElapsed)
@@ -149,7 +144,7 @@ export function Demo2Runner() {
         result: res,
         elapsedSec: finalElapsed,
         cached: !!cached,
-        source: useMock ? 'fixture' : 'live',
+        source: 'live',
       })
       appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s`, color: '#5A4A8A' })
       appendVerdictLogs(res, appendLog)
@@ -171,10 +166,9 @@ export function Demo2Runner() {
         error: message,
         elapsedSec: finalElapsed,
         cached: !!cached,
-        source: useMock ? 'fixture' : 'live',
+        source: 'live',
       })
       appendLog({ ts: tsNow(), text: `✕ post-audit call failed — ${message}`, color: '#FF4444' })
-      appendLog({ ts: '',      text: '   tip: enable USE MOCK toggle for the captured response', color: '#5A4A8A' })
     }
   }
 
@@ -185,8 +179,6 @@ export function Demo2Runner() {
       <ControlBar
         target={target}
         onTargetChange={setTarget}
-        useMock={useMock}
-        onUseMockChange={setUseMock}
         onRun={run}
         onReset={reset}
         phase={phase}
@@ -201,8 +193,6 @@ export function Demo2Runner() {
 interface ControlBarProps {
   target: PostAuditTarget
   onTargetChange: (t: PostAuditTarget) => void
-  useMock: boolean
-  onUseMockChange: (v: boolean) => void
   onRun: () => void
   onReset: () => void
   phase: Phase
@@ -210,8 +200,7 @@ interface ControlBarProps {
 }
 
 function ControlBar({
-  target, onTargetChange, useMock, onUseMockChange,
-  onRun, onReset, phase, elapsedSec,
+  target, onTargetChange, onRun, onReset, phase, elapsedSec,
 }: ControlBarProps) {
   const running = phase === 'running'
   const done = phase === 'done'
@@ -233,7 +222,6 @@ function ControlBar({
           Pick a settled tx, run the audit, jump to the full report.
         </span>
         <span style={{ flex: 1 }} />
-        <MockToggle value={useMock} onChange={onUseMockChange} disabled={running} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -366,33 +354,6 @@ function TargetCard({
         </a>
       </div>
     </div>
-  )
-}
-
-function MockToggle({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled: boolean }) {
-  return (
-    <label style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 10px', borderRadius: 4,
-      border: `1px solid ${value ? '#FFE600' : '#2D1F5E'}`,
-      background: value ? 'rgba(255,230,0,0.08)' : 'transparent',
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.5 : 1,
-    }}>
-      <input
-        type="checkbox"
-        checked={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: '#FFE600', cursor: disabled ? 'not-allowed' : 'pointer' }}
-      />
-      <span style={{
-        fontFamily: "'Press Start 2P', monospace", fontSize: 7,
-        color: value ? '#FFE600' : '#5A4A8A', letterSpacing: '0.08em',
-      }}>
-        USE MOCK
-      </span>
-    </label>
   )
 }
 
@@ -640,11 +601,6 @@ function appendVerdictLogs(res: PostAuditReport, append: (l: LogLine) => void) {
     return
   }
   append({ ts, text: `✓ severity=${sev} · score ${res.overall_risk_score} — escrow would RELEASE`, color })
-}
-
-async function mockAudit(target: PostAuditTarget): Promise<PostAuditReport> {
-  await new Promise<void>(resolve => setTimeout(resolve, 2800))
-  return target.expectedSeverity === 'info' ? POSTAUDIT_MOCK_NORMAL : POSTAUDIT_MOCK_SANDWICH
 }
 
 async function replayCached(res: PostAuditReport): Promise<PostAuditReport> {

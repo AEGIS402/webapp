@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PRE_AUDIT_TARGETS, DemoTarget, PRE_AUDIT_CHAIN_ID } from '../../constants/data'
 import { preflight } from '../../api/preaudit'
-import { PREAUDIT_MOCK_SAFE, PREAUDIT_MOCK_UNSAFE } from '../../data/preaudit-mocks'
 import { PreflightResponse, Severity } from '../../types/preaudit'
 import { MonitorCard, MonitorCardConfig, LogLine } from './MonitorCard'
 import { useAuditModal } from '../../state/auditModal'
@@ -14,12 +13,10 @@ const tsNow = () => new Date().toTimeString().slice(0, 8)
 const short = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 
 const responseCache = new Map<string, PreflightResponse>()
-const cacheKey = (target: DemoTarget, useMock: boolean) =>
-  `${useMock ? 'mock' : 'live'}:${target.address}`
+const cacheKey = (target: DemoTarget) => `live:${target.address}`
 
 export function Demo1Runner() {
   const [target, setTarget] = useState<DemoTarget>(PRE_AUDIT_TARGETS[1])
-  const [useMock, setUseMock] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [logs, setLogs] = useState<LogLine[]>([])
   const [result, setResult] = useState<PreflightResponse | null>(null)
@@ -74,7 +71,7 @@ export function Demo1Runner() {
     const startedAt = performance.now()
     const elapsed = () => Math.round((performance.now() - startedAt) / 1000)
 
-    const cached = responseCache.get(cacheKey(target, useMock))
+    const cached = responseCache.get(cacheKey(target))
 
     modal.show({ phase: 'running', mode: 'pre', target, stage: 'intercept', elapsedSec: 0, cached: !!cached })
 
@@ -116,23 +113,21 @@ export function Demo1Runner() {
     try {
       const res = cached
         ? await replayCached(cached)
-        : useMock
-          ? await mockPreflight(target)
-          : await preflight(target.address, { signal: controller.signal, chainId: PRE_AUDIT_CHAIN_ID })
+        : await preflight(target.address, { signal: controller.signal, chainId: PRE_AUDIT_CHAIN_ID })
 
       if (controller.signal.aborted) return
       clearAllTimers()
       const finalElapsed = elapsed()
       setElapsedSec(finalElapsed)
 
-      responseCache.set(cacheKey(target, useMock), res)
+      responseCache.set(cacheKey(target), res)
       setResult(res)
       setPhase('done')
       modal.finishPre(target, res, finalElapsed)
       history.push({
         kind: 'pre',
         target, result: res, elapsedSec: finalElapsed,
-        cached: !!cached, source: useMock ? 'mock' : 'live',
+        cached: !!cached, source: 'live',
       })
       appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s`, color: '#5A4A8A' })
       appendVerdictLogs(res, appendLog)
@@ -148,10 +143,9 @@ export function Demo1Runner() {
       history.push({
         kind: 'pre',
         target, result: null, error: message, elapsedSec: finalElapsed,
-        cached: !!cached, source: useMock ? 'mock' : 'live',
+        cached: !!cached, source: 'live',
       })
       appendLog({ ts: tsNow(), text: `✕ pre-audit call failed — ${message}`, color: '#FF4444' })
-      appendLog({ ts: '',      text: '   tip: enable USE MOCK toggle to fall back to a captured response', color: '#5A4A8A' })
     }
   }
 
@@ -162,8 +156,6 @@ export function Demo1Runner() {
       <ControlBar
         target={target}
         onTargetChange={setTarget}
-        useMock={useMock}
-        onUseMockChange={setUseMock}
         onRun={run}
         onReset={reset}
         phase={phase}
@@ -178,15 +170,13 @@ export function Demo1Runner() {
 interface ControlBarProps {
   target: DemoTarget
   onTargetChange: (t: DemoTarget) => void
-  useMock: boolean
-  onUseMockChange: (v: boolean) => void
   onRun: () => void
   onReset: () => void
   phase: Phase
   elapsedSec: number
 }
 
-function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, onReset, phase, elapsedSec }: ControlBarProps) {
+function ControlBar({ target, onTargetChange, onRun, onReset, phase, elapsedSec }: ControlBarProps) {
   const running = phase === 'running'
   const done = phase === 'done'
 
@@ -208,7 +198,6 @@ function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, o
           Pick a hook to audit, then run. Result will jump to the full report.
         </span>
         <span style={{ flex: 1 }} />
-        <MockToggle value={useMock} onChange={onUseMockChange} disabled={running} />
       </div>
 
       {/* Target picker */}
@@ -354,33 +343,6 @@ function TargetCard({
         </a>
       </div>
     </div>
-  )
-}
-
-function MockToggle({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled: boolean }) {
-  return (
-    <label style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 10px', borderRadius: 4,
-      border: `1px solid ${value ? '#FFE600' : '#2D1F5E'}`,
-      background: value ? 'rgba(255,230,0,0.08)' : 'transparent',
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.5 : 1,
-    }}>
-      <input
-        type="checkbox"
-        checked={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: '#FFE600', cursor: disabled ? 'not-allowed' : 'pointer' }}
-      />
-      <span style={{
-        fontFamily: "'Press Start 2P', monospace", fontSize: 7,
-        color: value ? '#FFE600' : '#5A4A8A', letterSpacing: '0.08em',
-      }}>
-        USE MOCK
-      </span>
-    </label>
   )
 }
 
@@ -645,11 +607,6 @@ function appendVerdictLogs(res: PreflightResponse, append: (l: LogLine) => void)
     }
   }
   append({ ts: '', text: '   → payment halted before signing', color: '#FF4444' })
-}
-
-async function mockPreflight(target: DemoTarget): Promise<PreflightResponse> {
-  await new Promise<void>(resolve => setTimeout(resolve, 2800))
-  return target.expectedVerdict === 'safe' ? PREAUDIT_MOCK_SAFE : PREAUDIT_MOCK_UNSAFE
 }
 
 async function replayCached(res: PreflightResponse): Promise<PreflightResponse> {
