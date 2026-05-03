@@ -77,9 +77,3 @@ src/
 **Fonts** — Press Start 2P (UI labels) + IBM Plex Mono (data/mono)  
 **Theme** — Aegis Arcade: dark navy base, neon accents, scanline overlay
 
-## Team
-
-- **Sanghyun** — Backend / Contract
-- **Isak** — AI Backend
-- **Mingi** — Frontend
-- **Sangyoon** — Design / Presentation
