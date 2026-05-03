@@ -1,9 +1,11 @@
 import type { PostAuditReport } from '../types/postaudit'
 
+// `||` over `??` so empty strings (undefined GitHub Actions secrets baked
+// in at build time) also fall through to the next option.
 const POST_AUDIT_BASE: string =
   import.meta.env.VITE_POSTAUDIT_URL
-  ?? import.meta.env.VITE_POSTAUDIT_PROXY
-  ?? '/api/postaudit'
+  || import.meta.env.VITE_POSTAUDIT_PROXY
+  || '/api/postaudit'
 
 export interface PostAuditOptions {
   signal?: AbortSignal

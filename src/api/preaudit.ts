@@ -2,11 +2,12 @@ import type { PreflightResponse } from '../types/preaudit'
 
 // In production builds VITE_PREAUDIT_PROXY (or VITE_PREAUDIT_URL) is baked
 // into the bundle and used as a direct URL. In dev (no env var) fall back to
-// /api/preaudit which the Vite dev proxy forwards.
+// /api/preaudit which the Vite dev proxy forwards. `||` over `??` so empty
+// strings (undefined GitHub Actions secrets) also fall through.
 const PRE_AUDIT_BASE: string =
   import.meta.env.VITE_PREAUDIT_URL
-  ?? import.meta.env.VITE_PREAUDIT_PROXY
-  ?? '/api/preaudit'
+  || import.meta.env.VITE_PREAUDIT_PROXY
+  || '/api/preaudit'
 
 export interface PreflightOptions {
   signal?: AbortSignal

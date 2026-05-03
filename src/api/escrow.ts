@@ -1,9 +1,11 @@
 import type { EscrowScenarioId, EscrowScenarioRunResult } from '../types/escrow'
 
+// `||` over `??` so empty strings (undefined GitHub Actions secrets baked
+// in at build time) also fall through to the next option.
 const POST_AUDIT_BASE: string =
   import.meta.env.VITE_POSTAUDIT_URL
-  ?? import.meta.env.VITE_POSTAUDIT_PROXY
-  ?? '/api/postaudit'
+  || import.meta.env.VITE_POSTAUDIT_PROXY
+  || '/api/postaudit'
 
 export interface RunScenarioOptions {
   signal?: AbortSignal
