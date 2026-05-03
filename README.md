@@ -1,6 +1,6 @@
 # AEGIS402 Webapp
 
-AEGIS402 데모용 프론트엔드. x402 결제 흐름을 사전·사후 감사하고, 위험 트랜잭션을 에스크로 + 보험풀로 연결하는 가드 월렛의 시연 UI.
+Demo frontend for AEGIS402. The agent wallet pre- and post-audits x402 payment flows, then routes risky transactions through an audit-responsive escrow + insurance pool.
 
 EthGlobal 2026.
 
@@ -35,7 +35,7 @@ cp .env.example .env
 # then edit .env if you need to point at local servers
 ```
 
-`.env.example` documents the two variables; copy it to `.env` and fill in the deployed URLs:
+`.env.example` lists the two variables. Copy it to `.env` and fill in the deployed URLs:
 
 ```
 VITE_PREAUDIT_PROXY=http://<host>:<port>
@@ -45,9 +45,9 @@ VITE_POSTAUDIT_PROXY=http://<host>:<port>
 | Endpoint (webapp) | Proxies to | Backend |
 |---|---|---|
 | `/api/preaudit/*`  | `$VITE_PREAUDIT_PROXY`  | [`pre-audit/`](../pre-audit) — contract pre-audit (eth_getCode + Etherscan + LLM) |
-| `/api/postaudit/*` | `$VITE_POSTAUDIT_PROXY` | [`post-audit/`](../post-audit) — tx post-audit (RPC + decode + LLM) |
+| `/api/postaudit/*` | `$VITE_POSTAUDIT_PROXY` | [`post-audit/`](../post-audit) — tx post-audit + Demo 3 escrow scenarios (`POST /scenario/{normal|sandwich}`) |
 
-Same-origin proxy avoids CORS in the browser. Falls back to `http://127.0.0.1:13001` and `http://127.0.0.1:3000` when env vars are unset.
+The same-origin proxy avoids CORS in the browser. Falls back to `http://127.0.0.1:13001` and `http://127.0.0.1:3000` when the env vars are unset. Proxy timeouts are bumped to 600s because the LLM round trip can exceed two minutes (and Demo 3's full settle can run three minutes).
 
 To run the backends locally instead:
 
@@ -55,7 +55,7 @@ To run the backends locally instead:
 # pre-audit (Demo 1)
 cd ../pre-audit && npm install && npm start  # listens on 13001
 
-# post-audit (Demo 2)
+# post-audit (Demo 2 / Demo 3)
 cd ../post-audit && npm install && npm run api  # listens on 3000, --network sepolia
 ```
 
@@ -63,113 +63,125 @@ Both backends require an OpenAI-compatible LLM endpoint configured in their `.en
 
 ## Demo Scenarios
 
-| Scenario | Story | Frontend route | Backend repo |
+| Scenario | Story | Frontend route | Backend |
 |---|---|---|---|
-| **Demo 1 · Pre-Audit** | x402 결제 직전, 훅 컨트랙트 코드를 LLM에 넘겨 risk 판정 (safe / warning / unsafe) | `/overview` (Scenario 1 toggle) → `/audit/pre` | [`pre-audit/`](../pre-audit), [`x402-hook/`](../x402-hook) |
-| **Demo 2 · Post-Audit** | 이미 settle된 protected swap의 영수증을 LLM에 넘겨 sandwich/슬리피지 검출 | `/overview` (Scenario 2 toggle) → `/audit/post` | [`post-audit/`](../post-audit) |
-| **Demo 3 · Insured Escrow** | 사후감사 verdict를 표준 `executeAuditDecision`으로 보내 RELEASE 또는 BLOCK_AND_CLAIM 정산 | `/escrow` (현재 fixture 기반 미리보기) | [`escrow-hook/`](../escrow-hook) — API 미구현 |
+| **Demo 1 · Pre-Audit** | Before signing an x402 payment, ship the hook contract source to the LLM and get a safe / warning / unsafe verdict. | `/overview` (Scenario 1 toggle) → `/audit/pre` | [`pre-audit/`](../pre-audit), [`x402-hook/`](../x402-hook) |
+| **Demo 2 · Post-Audit** | Replay a settled protected swap through the LLM to surface sandwich / value-imbalance findings. | `/overview` (Scenario 2 toggle) → `/audit/post` | [`post-audit/`](../post-audit) |
+| **Demo 3 · Insured Escrow** | Drive a real Sepolia `protectedExactInputSingle`, post-audit the receipt, then have the auditor sign `executeAuditDecision` (RELEASE or BLOCK_AND_CLAIM) and let the insurance pool refund the user when needed. | `/overview` (Scenario 3 toggle) → `/escrow` | [`escrow-hook/`](../escrow-hook) + [`post-audit/`](../post-audit) |
 
-Demo 3은 현재 별도 API가 없어서 `/escrow` 페이지에서 캡쳐된 Sepolia e2e 결과를 정적으로 렌더한다. 새 escrow API가 붙으면 Overview 토글에 합류 예정.
+All three scenarios share the same on-screen pattern: pick a target → press RUN → the wallet panel dims and an `AgentInterceptModal` slides in with stage tracker / elapsed timer → on completion a `ResultPanel` surfaces the verdict and a CTA that jumps to the corresponding report page.
 
 ## Routes
 
-| Path | Page | 설명 |
+| Path | Page | Description |
 |---|---|---|
-| `/`              | Landing       | 진입 화면 |
-| `/overview`      | Overview      | Demo 1 / Demo 2 토글 + AuditHistory |
-| `/audit/pre`     | AuditPage     | 라이브 pre-audit 응답 풀 리포트 (router state로 audit 객체 전달) |
-| `/audit/post`    | AuditPage     | 라이브 post-audit 응답 풀 리포트 (router state) |
-| `/escrow`        | EscrowPage    | EscrowList + EscrowDetailView. 진짜 e2e:escrow:live 결과 (SHOW EXAMPLE DATA 토글) |
-| `/integrations`  | IntegrationsPage | Hook 등록 정보 |
+| `/`              | Landing       | Hero + feature cards |
+| `/overview`      | Overview      | Demo 1 / 2 / 3 scenario toggle + AuditHistory |
+| `/audit/pre`     | AuditPage     | Live pre-audit report (audit object passed via router state) |
+| `/audit/post`    | AuditPage     | Live post-audit report (router state) |
+| `/escrow`        | EscrowPage    | EscrowList + EscrowDetailView; live entries pushed by Demo 3, fixture entries shown when no live runs exist |
+| `*`              | →             | Redirect to `/` |
+
+`/integrations` and the `IntegrationsPage` component are still in the tree but commented out in `App.tsx` and `NAV_ITEMS` until the registry feature is ready.
 
 ## Project Structure
 
 ```
 src/
-├── App.tsx                          # <Routes> 라우트 정의
-├── main.tsx                         # BrowserRouter + 3 providers (AuditModal/AuditHistory/EscrowHistory)
-├── index.css                        # Global + scanline overlay
+├── App.tsx                          # <Routes> definition
+├── main.tsx                         # BrowserRouter + 4 providers (Wallet/EscrowHistory/AuditHistory/AuditModal)
+├── index.css                        # Global styles + scanline overlay
 ├── vite-env.d.ts                    # ImportMetaEnv (VITE_PREAUDIT_URL / VITE_POSTAUDIT_URL)
 │
-├── api/                             # 백엔드 API 클라이언트
+├── api/                             # Backend API clients
 │   ├── preaudit.ts                  # POST /v1/tx/preflight
-│   └── postaudit.ts                 # POST /audit/from-tx | /audit/subject
+│   ├── postaudit.ts                 # POST /audit/from-tx | /audit/subject
+│   └── escrow.ts                    # POST /scenario/{normal|sandwich}
 │
-├── types/                           # 백엔드 응답 타입
+├── types/                           # Backend response shapes
 │   ├── preaudit.ts                  # PreflightResponse, AuditReport, Vulnerability
-│   └── postaudit.ts                 # PostAuditReport (= AuditReport)
+│   ├── postaudit.ts                 # PostAuditReport (= AuditReport)
+│   └── escrow.ts                    # EscrowScenarioRunResult + escrowStateLabel
 │
-├── data/                            # 캡쳐된 응답 / 시연용 fixture
-│   ├── preaudit-mocks.ts            # Demo 1 USE MOCK 폴백 (Safe / Unsafe Hook)
-│   ├── postaudit-mocks.ts           # Demo 2 USE MOCK 폴백 (Normal / Sandwich)
-│   └── escrow-fixtures.ts           # Demo 3 시나리오 fixture (real Sepolia tx hashes)
+├── data/                            # Captured fixtures used as failover / preview
+│   ├── preaudit-mocks.ts            # Captured pre-audit responses (Safe / Unsafe hook)
+│   ├── postaudit-mocks.ts           # Captured post-audit responses (Normal / Sandwich)
+│   └── escrow-fixtures.ts           # Demo 3 example entries (real Sepolia tx hashes)
 │
 ├── state/                           # React Context providers
-│   ├── auditModal.tsx               # 우측 wallet 영역에 뜨는 AgentInterceptModal 상태
-│   ├── auditHistory.tsx             # /overview 하단 누적 history (PRE/POST 분기)
-│   └── escrowHistory.tsx            # /escrow 페이지의 escrow 엔트리 풀
+│   ├── auditModal.tsx               # AgentInterceptModal state — pre / post / escrow modes
+│   ├── auditHistory.tsx             # /overview audit history feed (PRE / POST entries)
+│   ├── escrowHistory.tsx            # /escrow entries (live + fixture)
+│   └── wallet.tsx                   # Live USDC / USDT / WETH / ARB balances
 │
 ├── constants/
 │   ├── colors.ts                    # Design tokens
 │   └── data.ts                      # NAV_ITEMS, PRE_AUDIT_TARGETS, POST_AUDIT_TARGETS,
-│                                    # ESCROW_DEPLOYMENT, ESCROW_SCENARIOS, explorerForChain
+│                                    # ESCROW_DEPLOYMENT, ESCROW_SCENARIOS, MAINNET_EXPLORER,
+│                                    # SEPOLIA_EXPLORER, explorerForChain
 │
 ├── pages/
-│   ├── Landing.tsx                  # Hero + feature cards
-│   ├── DashboardLayout.tsx          # Sidebar + Topbar + WalletPanel(+ AgentInterceptModal overlay)
-│   ├── Overview.tsx                 # Demo 1 / Demo 2 시나리오 토글
-│   └── Pages.tsx                    # AuditPage / EscrowPage / IntegrationsPage
+│   ├── Landing.tsx                  # Hero + feature cards + dashboard preview
+│   ├── DashboardLayout.tsx          # Sidebar + Topbar + WalletPanel (with AgentInterceptModal overlay)
+│   ├── Overview.tsx                 # Scenario 1 / 2 / 3 toggle + AuditHistory
+│   └── Pages.tsx                    # AuditPage, EscrowPage, IntegrationsPage (last one is unmounted)
 │
 └── components/
     ├── shared/                      # Sidebar, Topbar, WalletPanel, StatusPill, Logo
     ├── agent/
-    │   └── AgentInterceptModal.tsx  # 모드별(pre/post) 단계 트래커 + verdict view, wallet 위에 슬라이드 인
+    │   └── AgentInterceptModal.tsx  # Mode-aware (pre / post / escrow) stage tracker + verdict view, slides in over the wallet panel
     ├── overview/
-    │   ├── MonitorCard.tsx          # 헤더 + 4-단 Pipeline + STEP DETAIL 로그 (override 가능)
-    │   ├── Pipeline.tsx             # 노드 + 흐르는 커넥터 애니메이션
-    │   ├── Demo1Runner.tsx          # Demo 1 컨트롤바 + RUN + ResultPanel + USE MOCK
-    │   ├── Demo2Runner.tsx          # Demo 2 컨트롤바 + RUN + ResultPanel + USE MOCK
-    │   ├── AuditHistory.tsx         # PRE/POST 칩 + ↗ ESCROW cross-link
-    │   └── AuditList.tsx            # 정적 mock 리스트 (라우터 state 없을 때 폴백)
+    │   ├── MonitorCard.tsx          # Header + 4-step Pipeline + STEP DETAIL log (override-friendly)
+    │   ├── Pipeline.tsx             # Pipeline nodes + flowing connector animation
+    │   ├── Demo1Runner.tsx          # Pre-audit ControlBar + RUN + ResultPanel
+    │   ├── Demo2Runner.tsx          # Post-audit ControlBar + RUN + ResultPanel
+    │   ├── AuditHistory.tsx         # PRE / POST chips, ↗ ESCROW cross-link for post entries
+    │   └── AuditList.tsx            # Static mock list shown when /audit/* has no router state
     ├── audit/
     │   ├── shared.tsx               # ScoreGauge, FindingsBreakdown, VulnerabilityCard, Meter
-    │   ├── PreAuditLiveView.tsx     # /audit/pre — 컨트랙트 주소 Hero
-    │   └── PostAuditLiveView.tsx    # /audit/post — tx 정보 Hero
+    │   ├── PreAuditLiveView.tsx     # /audit/pre — contract-address Hero
+    │   └── PostAuditLiveView.tsx    # /audit/post — tx Hero
     ├── escrow/
-    │   ├── EscrowList.tsx           # /escrow 좌측 — escrowHistory 누적 + SHOW EXAMPLE DATA 토글
-    │   └── EscrowDetailView.tsx     # /escrow 우측 — Hero / Trade / Decision / Settlement / Balances
+    │   ├── Demo3Runner.tsx          # Picker + RUN + 4-stage tracker + LogStream + ResultPanel + escrow modal dispatch
+    │   ├── EscrowList.tsx           # Left column on /escrow; LIVE / EXAMPLE badges per source
+    │   └── EscrowDetailView.tsx     # Right column — Hero / ExplainerCard / Trade / AuditDecision / Settlement / Balances / Findings / NarrationCard
     └── integrations/
-        └── HookGrid.tsx
+        └── HookGrid.tsx             # Static hook registry (route currently hidden)
 ```
 
 ## Demo Flow
 
 **Demo 1 — Pre-Audit (live)**
-1. `/overview` → Scenario 1 토글 → 타깃 카드 (Aegis402SafeHook / VulnerableHook on Sepolia) 픽
-2. ▶ RUN PRE-AUDIT → 우측 wallet 패널이 dim+blur, AgentInterceptModal 슬라이드 인
-3. 모달 단계: `intercept` → `RPC eth_getCode` → `Etherscan getsourcecode` → `LLM analysis` → 모달이 `✓ ALLOW` / `✕ BLOCK`로 전환
-4. ResultPanel CTA → `/audit/pre` 풀 리포트 (Hero 게이지 + V-001~V-006 카드)
+1. `/overview` → Scenario 1 toggle → pick a target card (Safe hook / Vulnerable hook on Sepolia)
+2. ▶ RUN PRE-AUDIT → the right wallet panel dims + blurs and `AgentInterceptModal` slides in
+3. Modal stages: `intercept` → `RPC eth_getCode` → `Etherscan getsourcecode` → `LLM analysis` → flips to `✓ ALLOW` / `⚠ WARNING` / `✕ BLOCK`
+4. ResultPanel CTA → `/audit/pre` full report (Hero gauge + V-001..V-006 cards)
+5. On a SAFE verdict the wallet deducts `0.001 USDC` (the agent actually signs the x402 payment)
 
 **Demo 2 — Post-Audit (live)**
-1. `/overview` → Scenario 2 토글 → 타깃 픽 (Normal / Sandwich victim swap on Sepolia)
-2. ▶ RUN POST-AUDIT → 모달 단계: `tx received` → `RPC tx + receipt` → `decode logs + flows` → `LLM analysis` → verdict
-3. ResultPanel CTA → `/audit/post` 풀 리포트 (tx Hero + 시나리오 vulnerability 리스트)
-4. AuditHistory에 POST 엔트리 누적
+1. `/overview` → Scenario 2 toggle → pick a Sepolia tx (Normal protected swap / Sandwich victim swap)
+2. ▶ RUN POST-AUDIT → modal stages: `tx received` → `RPC tx + receipt` → `decode logs + flows` → `LLM analysis` → verdict
+3. ResultPanel CTA → `/audit/post` full report (tx Hero + scenario vulnerability list)
+4. Wallet deducts `amountIn + protectionFee USDT` to reflect the swap that already settled on-chain
+5. AuditHistory accumulates the POST entry (PRE/POST chip)
 
-**Demo 3 — Insured Escrow (fixture preview)**
-- `/escrow` 직접 진입 → "SHOW EXAMPLE DATA" 토글 → Sepolia e2e:escrow:live 결과 두 건 미리보기
-- 진짜 swap/decision tx etherscan 링크 작동 (실제 Sepolia)
-- 별도 escrow API가 붙으면 Overview에서 라이브 트리거하도록 통합
+**Demo 3 — Insured Escrow (live)**
+1. `/overview` → Scenario 3 toggle → pick NORMAL / SANDWICH
+2. ▶ RUN SCENARIO → `POST /api/postaudit/scenario/{id}` (≈ 60–180 s on Sepolia)
+3. Modal stages: `Mint + approve` → `Protected swap` → `Post-audit` → `Auditor decision`; the on-card StageStrip and elapsed timer mirror the modal
+4. When the response lands, the API's `narration[]` (11–14 lines) is replayed at 250 ms intervals so the on-chain story scrolls past in a few seconds
+5. ResultPanel CTA → `/escrow` with the new entry id in router state; EscrowList auto-selects it and EscrowDetailView renders Hero / ExplainerCard / Trade / Decision / Settlement / post-decision balances / Findings / NarrationCard
+6. Etherscan links to swap and decision tx are real Sepolia and clickable
 
-## USE MOCK 토글
+## Wallet panel
 
-Demo 1, Demo 2 둘 다 컨트롤바에 `USE MOCK` 토글이 있다. 켜면 라이브 API 대신 [data/preaudit-mocks.ts](src/data/preaudit-mocks.ts) / [data/postaudit-mocks.ts](src/data/postaudit-mocks.ts)의 캡쳐 응답을 ~3초 안에 재생. 발표 중 LLM/RPC 다운 대비.
+`state/wallet.tsx` exposes a `WalletProvider` with mutable balances (USDC, USDT, WETH, ARB). Demo 1 and Demo 2 deduct from these on completion so judges see the balance tick down as scenarios run. AEGIS appears only inside the escrow flow on `/escrow`, not as a wallet token.
 
 ## Design System
 
 - **Colors** — `src/constants/colors.ts`
-- **Fonts** — Press Start 2P (UI 라벨) + IBM Plex Mono (주소/숫자)
+- **Fonts** — Press Start 2P (UI labels) + IBM Plex Mono (addresses / numbers)
 - **Theme** — Aegis Arcade: dark navy + neon accent + scanline overlay
 - **Severity colors** — critical `#FF4444` / high `#FF8A4D` / medium `#FFE600` / low `#7F77DD` / info `#A8FF3E`
-- **RISK score 표시** — 모든 게이지/배지 위에 `RISK` 라벨 + "lower is safer · 0–19 info · 90+ critical" 안내
+- **RISK score** — gauges and badges always show a `RISK` label with a "lower is safer · 0–19 info · 90+ critical" hint
 
