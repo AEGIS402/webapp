@@ -28,16 +28,28 @@ npm run preview
 
 ## Backend Servers
 
-The webapp talks to two local backends through the Vite dev proxy:
+The webapp talks to two backends through the Vite dev proxy. Targets come from `.env`:
 
-| Endpoint (webapp) | Proxies to | Backend repo |
+```bash
+cp .env.example .env
+# then edit .env if you need to point at local servers
+```
+
+`.env.example` documents the two variables; copy it to `.env` and fill in the deployed URLs:
+
+```
+VITE_PREAUDIT_PROXY=http://<host>:<port>
+VITE_POSTAUDIT_PROXY=http://<host>:<port>
+```
+
+| Endpoint (webapp) | Proxies to | Backend |
 |---|---|---|
-| `/api/preaudit/*`  | `http://127.0.0.1:13001` | [`pre-audit/`](../pre-audit) — contract pre-audit (eth_getCode + Etherscan + LLM) |
-| `/api/postaudit/*` | `http://127.0.0.1:3000`  | [`post-audit/`](../post-audit) — tx post-audit (RPC + decode + LLM) |
+| `/api/preaudit/*`  | `$VITE_PREAUDIT_PROXY`  | [`pre-audit/`](../pre-audit) — contract pre-audit (eth_getCode + Etherscan + LLM) |
+| `/api/postaudit/*` | `$VITE_POSTAUDIT_PROXY` | [`post-audit/`](../post-audit) — tx post-audit (RPC + decode + LLM) |
 
-Override targets with `VITE_PREAUDIT_PROXY` / `VITE_POSTAUDIT_PROXY` env vars before `npm run dev`.
+Same-origin proxy avoids CORS in the browser. Falls back to `http://127.0.0.1:13001` and `http://127.0.0.1:3000` when env vars are unset.
 
-To run the backends:
+To run the backends locally instead:
 
 ```bash
 # pre-audit (Demo 1)
@@ -47,7 +59,7 @@ cd ../pre-audit && npm install && npm start  # listens on 13001
 cd ../post-audit && npm install && npm run api  # listens on 3000, --network sepolia
 ```
 
-Both backends require an OpenAI-compatible LLM endpoint configured in their `.env`. See each repo's README for details.
+Both backends require an OpenAI-compatible LLM endpoint configured in their `.env`.
 
 ## Demo Scenarios
 
