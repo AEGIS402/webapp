@@ -10,7 +10,7 @@ interface WalletPanelProps {
 export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
   const w = WALLET_DATA
   const { state } = useAuditModal()
-  const { balances, reset } = useWallet()
+  const { balances } = useWallet()
   const dim = state.phase !== 'hidden'
 
   return (
@@ -57,19 +57,7 @@ export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
       </Section>
 
       {/* Tokens */}
-      <Section label="TOKENS" rightSlot={
-        <button
-          onClick={reset}
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: '#5A4A8A',
-            fontFamily: "'Press Start 2P', monospace", fontSize: 6,
-            letterSpacing: '0.1em',
-          }}
-        >
-          RESET
-        </button>
-      }>
+      <Section label="TOKENS">
         {TOKEN_META.map(tok => (
           <TokenRow key={tok.symbol} symbol={tok.symbol} color={tok.color} priceUsd={tok.priceUsd} balance={balances[tok.symbol]} />
         ))}
@@ -122,24 +110,12 @@ export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
   )
 }
 
-function Section({
-  label, rightSlot, children,
-}: {
-  label?: string
-  rightSlot?: React.ReactNode
-  children: React.ReactNode
-}) {
+function Section({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
     <div style={{ padding: '10px 14px', borderBottom: '1px solid #2D1F5E' }}>
       {label && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 8,
-        }}>
-          <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 6, color: '#5A4A8A', letterSpacing: '0.14em' }}>
-            {label}
-          </span>
-          {rightSlot}
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 6, color: '#5A4A8A', letterSpacing: '0.14em', marginBottom: 8 }}>
+          {label}
         </div>
       )}
       {children}
