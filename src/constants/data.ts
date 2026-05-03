@@ -12,7 +12,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/overview',     label: 'OVERVIEW',     match: '/overview' },
   { to: '/audit/pre',    label: 'AUDIT',        match: '/audit' },
   { to: '/escrow',       label: 'ESCROW',       match: '/escrow' },
-  { to: '/integrations', label: 'INTEGRATIONS', match: '/integrations' },
+  // INTEGRATIONS hidden until the registry feature is implemented.
+  // { to: '/integrations', label: 'INTEGRATIONS', match: '/integrations' },
 ]
 
 export interface DemoTarget {

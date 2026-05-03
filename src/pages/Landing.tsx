@@ -56,7 +56,7 @@ export function Landing() {
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {/* Mini sidebar */}
             <div style={{ width: 72, background: '#13102E', borderRight: '1px solid #2D1F5E', padding: 8, flexShrink: 0 }}>
-              {['OVERVIEW', 'AUDIT', 'ESCROW', 'INTEGRATIONS'].map((item, i) => (
+              {['OVERVIEW', 'AUDIT', 'ESCROW'].map((item, i) => (
                 <div key={item} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 5, padding: '5px 4px', color: i === 0 ? '#7F77DD' : '#5A4A8A', borderRadius: 2, marginBottom: 2, background: i === 0 ? 'rgba(127,119,221,0.12)' : 'transparent' }}>{item}</div>
               ))}
             </div>
