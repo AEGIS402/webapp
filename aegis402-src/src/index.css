@@ -1,0 +1,35 @@
+/* ── Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; overflow: hidden; }
+body {
+  background: #0A0818;
+  color: #F2E7FF;
+  font-family: 'IBM Plex Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scanline overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent, transparent 3px,
+    rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 4px
+  );
+}
+
+/* ── Grid background */
+.grid-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(45,31,94,0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45,31,94,0.15) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0A0818; }
+::-webkit-scrollbar-thumb { background: #2D1F5E; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #534AB7; }
