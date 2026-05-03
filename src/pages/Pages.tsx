@@ -8,7 +8,6 @@ import { EscrowList } from '../components/escrow/EscrowList'
 import { EscrowDetailView } from '../components/escrow/EscrowDetailView'
 import { HookGrid } from '../components/integrations/HookGrid'
 import { useEscrowHistory, EscrowHistoryEntry } from '../state/escrowHistory'
-import { ESCROW_FIXTURES } from '../data/escrow-fixtures'
 import type { PreflightResponse } from '../types/preaudit'
 import type { PostAuditReport } from '../types/postaudit'
 
@@ -84,23 +83,17 @@ export function EscrowPage() {
   const { entries, getById } = useEscrowHistory()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Prefer router-state entryId → first live entry → first example.
+  // Prefer router-state entryId, otherwise first live entry.
   useEffect(() => {
     const stateId = (location.state as EscrowLocationState | null)?.entryId
     if (stateId && getById(stateId)) {
       setSelectedId(stateId)
       return
     }
-    if (entries.length > 0) {
-      setSelectedId(entries[0].id)
-      return
-    }
-    setSelectedId('example-sandwich')
+    setSelectedId(entries.length > 0 ? entries[0].id : null)
   }, [location.state, entries, getById])
 
-  const selectedEntry: EscrowHistoryEntry | null = selectedId
-    ? getById(selectedId) ?? exampleById(selectedId)
-    : null
+  const selectedEntry: EscrowHistoryEntry | null = selectedId ? getById(selectedId) ?? null : null
 
   const subtitle = selectedEntry
     ? `tradeId ${selectedEntry.tradeId.slice(0, 10)}… · ${selectedEntry.chosenAction}`
@@ -131,16 +124,6 @@ export function EscrowPage() {
       </div>
     </DashboardLayout>
   )
-}
-
-function exampleById(id: string): EscrowHistoryEntry | null {
-  if (id === 'example-sandwich') {
-    return { ...ESCROW_FIXTURES.sandwich, id, timestamp: Date.now(), source: 'fixture' }
-  }
-  if (id === 'example-normal') {
-    return { ...ESCROW_FIXTURES.normal, id, timestamp: Date.now(), source: 'fixture' }
-  }
-  return null
 }
 
 export function IntegrationsPage() {

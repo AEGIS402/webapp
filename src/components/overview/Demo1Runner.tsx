@@ -19,7 +19,7 @@ const responseCache = new Map<string, PreflightResponse>()
 const cacheKey = (target: DemoTarget) => `live:${target.address}`
 
 export function Demo1Runner() {
-  const [target, setTarget] = useState<DemoTarget>(PRE_AUDIT_TARGETS[1])
+  const [target, setTarget] = useState<DemoTarget>(PRE_AUDIT_TARGETS[0])
   const [phase, setPhase] = useState<Phase>('idle')
   const [logs, setLogs] = useState<LogLine[]>([])
   const [result, setResult] = useState<PreflightResponse | null>(null)

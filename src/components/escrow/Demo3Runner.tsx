@@ -31,7 +31,7 @@ const tsNow = () => new Date().toTimeString().slice(0, 8)
 const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`
 
 export function Demo3Runner() {
-  const [scenario, setScenario] = useState<EscrowScenarioId>('sandwich')
+  const [scenario, setScenario] = useState<EscrowScenarioId>('normal')
   const [phase, setPhase] = useState<Phase>('idle')
   const [stage, setStage] = useState<StageKey>('mint')
   const [logs, setLogs] = useState<LogLine[]>([])

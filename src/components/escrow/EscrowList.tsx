@@ -1,5 +1,5 @@
 import { useEscrowHistory, EscrowHistoryEntry } from '../../state/escrowHistory'
-import { ESCROW_FIXTURES, shortfallPct } from '../../data/escrow-fixtures'
+import { shortfallPct } from '../../data/escrow-fixtures'
 
 const fmtTs = (ts: number) => new Date(ts).toTimeString().slice(0, 8)
 const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`
@@ -12,15 +12,7 @@ interface Props {
 export function EscrowList({ selectedId, onSelect }: Props) {
   const { entries, clear } = useEscrowHistory()
 
-  // Always populate with example entries when no live entries exist.
-  const exampleEntries: EscrowHistoryEntry[] = entries.length === 0
-    ? [
-        toExampleEntry(ESCROW_FIXTURES.sandwich),
-        toExampleEntry(ESCROW_FIXTURES.normal),
-      ]
-    : []
-
-  const allEntries = entries.length > 0 ? entries : exampleEntries
+  const allEntries = entries
 
   return (
     <div style={{
@@ -87,7 +79,6 @@ function Row({
   selected: boolean
   onClick: () => void
 }) {
-  const isLive = entry.source === 'live'
   const isClaim = entry.chosenAction === 'BLOCK_AND_CLAIM'
   const accent = isClaim ? '#FF4444' : '#A8FF3E'
   const sf = shortfallPct(entry)
@@ -111,25 +102,14 @@ function Row({
         }}>
           {isClaim ? '✕' : '✓'} {entry.scenario.toUpperCase()}
         </span>
-        {isLive ? (
-          <span style={{
-            fontFamily: "'Press Start 2P', monospace", fontSize: 6,
-            color: '#A8FF3E', letterSpacing: '0.1em',
-            border: '1px solid #A8FF3E', padding: '2px 5px',
-            borderRadius: 3, background: 'rgba(168,255,62,0.08)',
-          }}>
-            LIVE
-          </span>
-        ) : (
-          <span style={{
-            fontFamily: "'Press Start 2P', monospace", fontSize: 6,
-            color: '#FFE600', letterSpacing: '0.1em',
-            border: '1px solid #FFE600', padding: '2px 5px',
-            borderRadius: 3, background: 'rgba(255,230,0,0.08)',
-          }}>
-            EXAMPLE
-          </span>
-        )}
+        <span style={{
+          fontFamily: "'Press Start 2P', monospace", fontSize: 6,
+          color: '#A8FF3E', letterSpacing: '0.1em',
+          border: '1px solid #A8FF3E', padding: '2px 5px',
+          borderRadius: 3, background: 'rgba(168,255,62,0.08)',
+        }}>
+          LIVE
+        </span>
         <span style={{ flex: 1 }} />
         <span style={{
           fontSize: 9, color: '#5A4A8A',
@@ -178,11 +158,3 @@ function Row({
   )
 }
 
-function toExampleEntry(fixture: import('../../data/escrow-fixtures').EscrowScenarioFixture): EscrowHistoryEntry {
-  return {
-    ...fixture,
-    id: `example-${fixture.scenario}`,
-    timestamp: Date.now() - (fixture.scenario === 'sandwich' ? 60_000 : 120_000),
-    source: 'fixture',
-  }
-}

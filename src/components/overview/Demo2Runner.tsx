@@ -21,7 +21,7 @@ const responseCache = new Map<string, PostAuditReport>()
 const cacheKey = (target: PostAuditTarget) => `live:${target.txHash}`
 
 export function Demo2Runner() {
-  const [target, setTarget] = useState<PostAuditTarget>(POST_AUDIT_TARGETS[1])  // sandwich first by default
+  const [target, setTarget] = useState<PostAuditTarget>(POST_AUDIT_TARGETS[0])
   const [phase, setPhase] = useState<Phase>('idle')
   const [logs, setLogs] = useState<LogLine[]>([])
   const [result, setResult] = useState<PostAuditReport | null>(null)
