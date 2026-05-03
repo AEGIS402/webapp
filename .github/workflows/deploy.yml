@@ -33,10 +33,12 @@ jobs:
 
       - name: Build
         env:
-          # Direct backend URLs baked into the bundle. Both backends must
-          # send Access-Control-Allow-Origin: * (or this Pages origin).
-          VITE_PREAUDIT_PROXY:  ${{ secrets.VITE_PREAUDIT_PROXY }}
-          VITE_POSTAUDIT_PROXY: ${{ secrets.VITE_POSTAUDIT_PROXY }}
+          # Direct backend URLs baked into the bundle. Stored as
+          # environment Variables (not Secrets) since they're public IPs.
+          # Both backends must send Access-Control-Allow-Origin: *
+          # (or this Pages origin).
+          VITE_PREAUDIT_PROXY:  ${{ vars.VITE_PREAUDIT_PROXY }}
+          VITE_POSTAUDIT_PROXY: ${{ vars.VITE_POSTAUDIT_PROXY }}
         run: npm run build
 
       - uses: actions/configure-pages@v5
