@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { BadgeColor } from '../constants/data'
 import { DashboardLayout } from './DashboardLayout'
-import { MonitorCard, OverviewState } from '../components/overview/MonitorCard'
 import { Demo1Runner } from '../components/overview/Demo1Runner'
+import { Demo2Runner } from '../components/overview/Demo2Runner'
 import { AuditHistory } from '../components/overview/AuditHistory'
 
-type ScenarioId = 'pre-audit' | 'slippage'
+type ScenarioId = 'pre-audit' | 'post-audit'
 
 interface ScenarioMeta {
   id: ScenarioId
@@ -15,24 +15,22 @@ interface ScenarioMeta {
 }
 
 const SCENARIOS: ScenarioMeta[] = [
-  { id: 'pre-audit', label: 'SCENARIO 1 · PRE-AUDIT (LIVE)', badge: 'green',  color: '#A8FF3E' },
-  { id: 'slippage',  label: 'SCENARIO 2 · SLIPPAGE (MOCK)',  badge: 'yellow', color: '#FFE600' },
+  { id: 'pre-audit',  label: 'SCENARIO 1 · X402 PRE-AUDIT',  badge: 'green',  color: '#A8FF3E' },
+  { id: 'post-audit', label: 'SCENARIO 2 · POST-TX AUDIT',   badge: 'red',    color: '#FF8A4D' },
 ]
 
 export function Overview() {
   const [scenario, setScenario] = useState<ScenarioId>('pre-audit')
   const meta = SCENARIOS.find(s => s.id === scenario)!
-  const escrowActive = scenario === 'slippage'
 
   return (
     <DashboardLayout
       title="Overview"
       subtitle="Agent Developer · jawgstar.eth"
       badgeColor={meta.badge}
-      escrowActive={escrowActive}
     >
       <ScenarioToggle current={scenario} onChange={setScenario} />
-      {scenario === 'pre-audit' ? <Demo1Runner /> : <ScenarioMockView state="slippage" />}
+      {scenario === 'pre-audit' ? <Demo1Runner /> : <Demo2Runner />}
       <div style={{ marginTop: 12 }}>
         <AuditHistory />
       </div>
@@ -82,8 +80,4 @@ function ScenarioToggle({ current, onChange }: ScenarioToggleProps) {
       })}
     </div>
   )
-}
-
-function ScenarioMockView({ state }: { state: OverviewState }) {
-  return <MonitorCard state={state} />
 }

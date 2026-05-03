@@ -2,12 +2,20 @@ import { useNavigate } from 'react-router-dom'
 import { AuditStage, AuditModalState, useAuditModal } from '../../state/auditModal'
 import { DemoTarget } from '../../constants/data'
 import { PreflightResponse, Severity } from '../../types/preaudit'
+import type { PostAuditReport } from '../../types/postaudit'
 
-const STAGES: { key: AuditStage; label: string; sub: string }[] = [
+const PRE_STAGES: { key: AuditStage; label: string; sub: string }[] = [
   { key: 'intercept', label: 'Payment intercepted', sub: 'x402 request paused before signing' },
   { key: 'rpc',       label: 'RPC eth_getCode',     sub: 'detect EOA vs contract' },
   { key: 'source',    label: 'Etherscan source',    sub: 'fetch verified source' },
   { key: 'llm',       label: 'LLM analysis',        sub: 'gpt-oss-120b · risk-v1' },
+]
+
+const POST_STAGES: { key: AuditStage; label: string; sub: string }[] = [
+  { key: 'tx',     label: 'Tx hash received',         sub: 'post-audit triggered after settlement' },
+  { key: 'rpc',    label: 'RPC tx + receipt',         sub: 'eth_getTransactionByHash · receipt · block' },
+  { key: 'decode', label: 'Decode logs + asset flows', sub: 'Transfer / Approval / ProtectedSwapEscrowed' },
+  { key: 'llm',    label: 'LLM analysis',             sub: 'gpt-oss-120b · risk-v1' },
 ]
 
 export function AgentInterceptModal() {
@@ -31,7 +39,6 @@ export function AgentInterceptModal() {
 
 function ModalBody({ state }: { state: AuditModalState }) {
   if (state.phase === 'hidden') return null
-
   if (state.phase === 'running') return <RunningView state={state} />
   if (state.phase === 'done') return <DoneView state={state} />
   return <ErrorView state={state} />
@@ -58,11 +65,7 @@ function ModalShell({
       animation: 'agentModalIn 240ms ease-out',
     }}>
       <style>{KEYFRAMES}</style>
-
-      {/* Top accent bar */}
       <div style={{ height: 3, background: accent }} />
-
-      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 12px',
@@ -99,8 +102,6 @@ function ModalShell({
           ×
         </button>
       </div>
-
-      {/* Body */}
       <div style={{
         flex: 1, overflowY: 'auto',
         padding: 12,
@@ -113,45 +114,91 @@ function ModalShell({
 }
 
 function RunningView({ state }: { state: Extract<AuditModalState, { phase: 'running' }> }) {
+  if (state.mode === 'pre') {
+    return (
+      <ModalShell
+        accent="#378ADD"
+        title="AEGIS402 · INTERCEPT"
+        subtitle={`auditing ${short(state.target.address)}`}
+      >
+        <PreSubjectCard target={state.target} />
+        <StagesCard stages={PRE_STAGES} stage={state.stage} elapsedSec={state.elapsedSec} cached={state.cached} />
+        <NarrativeBox color="#378ADD">
+          AEGIS402 paused the agent before signing. The pre-audit will return either a green-light or a hard halt.
+        </NarrativeBox>
+      </ModalShell>
+    )
+  }
   return (
     <ModalShell
-      accent="#378ADD"
-      title="AEGIS402 · INTERCEPT"
-      subtitle={`auditing ${short(state.target.address)}`}
+      accent="#FF8A4D"
+      title="AEGIS402 · POST-AUDIT"
+      subtitle={`auditing ${short(state.subject.txHash)}`}
     >
-      <PaymentRequestCard target={state.target} />
-      <StagesCard stage={state.stage} elapsedSec={state.elapsedSec} cached={state.cached} />
-      <NarrativeBox color="#378ADD">
-        AEGIS402 paused the agent before signing. The pre-audit will return either a green-light or a hard halt.
+      <PostSubjectCard subject={state.subject} />
+      <StagesCard stages={POST_STAGES} stage={state.stage} elapsedSec={state.elapsedSec} cached={state.cached} />
+      <NarrativeBox color="#FF8A4D">
+        Swap settled. AEGIS402 is reviewing the tx receipt to decide RELEASE vs BLOCK_AND_CLAIM on the escrow.
       </NarrativeBox>
     </ModalShell>
   )
 }
 
 function DoneView({ state }: { state: Extract<AuditModalState, { phase: 'done' }> }) {
-  const tone = verdictTone(state.result.verdict)
+  if (state.mode === 'pre') {
+    const tone = preVerdictTone(state.result.verdict)
+    return (
+      <ModalShell
+        accent={tone.color}
+        title={`AEGIS402 · ${tone.titleSuffix}`}
+        subtitle={`pre-audit complete · ${state.elapsedSec}s`}
+      >
+        <PreSubjectCard target={state.target} dim />
+        <PreVerdictCard result={state.result} />
+        <NarrativeBox color={tone.color}>{tone.narrative}</NarrativeBox>
+        <ActionsRow
+          ctaLabel="→ REPORT"
+          ctaColor={tone.color}
+          onCta={() => null}
+          preResult={state.result}
+        />
+      </ModalShell>
+    )
+  }
+  const tone = postSeverityTone(state.result.overall_severity)
   return (
     <ModalShell
       accent={tone.color}
       title={`AEGIS402 · ${tone.titleSuffix}`}
-      subtitle={`audit complete · ${state.elapsedSec}s`}
+      subtitle={`post-audit complete · ${state.elapsedSec}s`}
     >
-      <PaymentRequestCard target={state.target} dim />
-      <VerdictCard result={state.result} />
+      <PostSubjectCard subject={state.subject} dim />
+      <PostVerdictCard audit={state.result} />
       <NarrativeBox color={tone.color}>{tone.narrative}</NarrativeBox>
-      <ActionsRow result={state.result} />
+      <ActionsRow
+        ctaLabel="→ REPORT"
+        ctaColor={tone.color}
+        onCta={() => null}
+        postSubject={state.subject}
+        postResult={state.result}
+      />
     </ModalShell>
   )
 }
 
 function ErrorView({ state }: { state: Extract<AuditModalState, { phase: 'error' }> }) {
+  const subtitle = state.mode === 'pre'
+    ? `pre-audit failed · ${state.elapsedSec}s`
+    : `post-audit failed · ${state.elapsedSec}s`
   return (
     <ModalShell
       accent="#FFE600"
       title="AEGIS402 · ERROR"
-      subtitle={`pre-audit failed · ${state.elapsedSec}s`}
+      subtitle={subtitle}
     >
-      <PaymentRequestCard target={state.target} dim />
+      {state.mode === 'pre'
+        ? <PreSubjectCard target={state.target} dim />
+        : <PostSubjectCard subject={state.subject} dim />}
       <div style={{
         background: '#13102E', border: '1px solid #FFE600',
         borderLeft: '3px solid #FFE600',
@@ -161,29 +208,47 @@ function ErrorView({ state }: { state: Extract<AuditModalState, { phase: 'error'
         {state.message}
       </div>
       <NarrativeBox color="#FFE600">
-        Agent halted the payment by default — better to refuse than to sign blind.
+        Agent halted by default — better to refuse than to act blind.
       </NarrativeBox>
     </ModalShell>
   )
 }
 
-function PaymentRequestCard({ target, dim = false }: { target: DemoTarget; dim?: boolean }) {
+function PreSubjectCard({ target, dim = false }: { target: DemoTarget; dim?: boolean }) {
   return (
     <Card label="X402 PAYMENT REQUEST" dim={dim}>
       <Row k="resource" v="/v1/x402/info" />
-      <Row k="pay to" v={short(target.address)} mono />
-      <Row k="amount" v="0.001 USDC" highlight />
-      <Row k="network" v="Sepolia · 11155111" />
+      <Row k="pay to"   v={short(target.address)} mono />
+      <Row k="amount"   v="0.001 USDC" highlight />
+      <Row k="network"  v="Sepolia · 11155111" />
     </Card>
   )
 }
 
-function StagesCard({ stage, elapsedSec, cached }: { stage: AuditStage; elapsedSec: number; cached: boolean }) {
-  const reachedIndex = STAGES.findIndex(s => s.key === stage)
+function PostSubjectCard({ subject, dim = false }: { subject: { txHash: string; scenarioLabel: string; subjectAddress: string }; dim?: boolean }) {
   return (
-    <Card label="AEGIS402 PRE-AUDIT">
+    <Card label="POST-SETTLEMENT TX" dim={dim}>
+      <Row k="scenario" v={subject.scenarioLabel} highlight />
+      <Row k="tx hash"  v={short(subject.txHash)} mono />
+      <Row k="subject"  v={short(subject.subjectAddress)} mono />
+      <Row k="network"  v="Sepolia · 11155111" />
+    </Card>
+  )
+}
+
+function StagesCard({
+  stages, stage, elapsedSec, cached,
+}: {
+  stages: { key: AuditStage; label: string; sub: string }[]
+  stage: AuditStage
+  elapsedSec: number
+  cached: boolean
+}) {
+  const reachedIndex = stages.findIndex(s => s.key === stage)
+  return (
+    <Card label="AEGIS402 PIPELINE">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {STAGES.map((s, i) => {
+        {stages.map((s, i) => {
           const status: 'done' | 'active' | 'pending' =
             i < reachedIndex ? 'done' : i === reachedIndex ? 'active' : 'pending'
           return <StageRow key={s.key} label={s.label} sub={s.sub} status={status} />
@@ -240,78 +305,132 @@ function StageRow({ label, sub, status }: { label: string; sub: string; status: 
   )
 }
 
-function VerdictCard({ result }: { result: PreflightResponse }) {
-  const tone = verdictTone(result.verdict)
+function PreVerdictCard({ result }: { result: PreflightResponse }) {
+  const tone = preVerdictTone(result.verdict)
   const audit = result.audit
   return (
     <Card label="VERDICT" accent={tone.color}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <div style={{
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', minWidth: 44,
-        }}>
-          <span style={{
-            fontFamily: "'Press Start 2P', monospace", fontSize: 6,
-            color: '#5A4A8A', letterSpacing: '0.16em',
-          }}>
-            RISK
-          </span>
-          <span style={{
-            fontFamily: "'Press Start 2P', monospace", fontSize: 18,
-            color: tone.color, lineHeight: 1.2,
-          }}>
-            {audit?.overall_risk_score ?? '—'}
-          </span>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontFamily: "'Press Start 2P', monospace", fontSize: 9,
-            color: tone.color, letterSpacing: '0.06em',
-          }}>
-            {tone.headline}
-          </div>
-          <div style={{ fontSize: 9, color: '#5A4A8A', marginTop: 3 }}>
-            {audit?.overall_severity?.toUpperCase() ?? '—'} · {result.reason}
-          </div>
-        </div>
-      </div>
+      <ScoreHeadline score={audit?.overall_risk_score ?? null} headline={tone.headline}
+                     severity={audit?.overall_severity ?? '—'} reason={result.reason} color={tone.color} />
       {audit && audit.vulnerabilities.length > 0 && (
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
-          {countBySeverity(audit.vulnerabilities.map(v => v.severity)).map(c => (
-            <span key={c.sev} style={{
-              fontFamily: "'Press Start 2P', monospace", fontSize: 7,
-              padding: '3px 7px', borderRadius: 3,
-              color: severityColor(c.sev),
-              border: `1px solid ${severityColor(c.sev)}`,
-              background: `${severityColor(c.sev)}14`,
-              letterSpacing: '0.06em',
-            }}>
-              {c.count} {c.sev.toUpperCase()}
-            </span>
-          ))}
-        </div>
+        <SeverityChips severities={audit.vulnerabilities.map(v => v.severity)} />
       )}
     </Card>
   )
 }
 
-function ActionsRow({ result }: { result: PreflightResponse }) {
+function PostVerdictCard({ audit }: { audit: PostAuditReport }) {
+  const tone = postSeverityTone(audit.overall_severity)
+  return (
+    <Card label="VERDICT" accent={tone.color}>
+      <ScoreHeadline score={audit.overall_risk_score} headline={tone.headline}
+                     severity={audit.overall_severity} reason={tone.short} color={tone.color} />
+      {audit.vulnerabilities.length > 0 && (
+        <SeverityChips severities={audit.vulnerabilities.map(v => v.severity)} />
+      )}
+      <div style={{
+        marginTop: 8, padding: '8px 10px',
+        background: '#0A0818', border: '1px solid #2D1F5E', borderRadius: 6,
+        fontSize: 9.5, color: '#9B8EC4', lineHeight: 1.5,
+      }}>
+        <span style={{ color: '#5A4A8A', fontFamily: "'Press Start 2P', monospace", fontSize: 6, letterSpacing: '0.14em' }}>
+          POLICY{' '}
+        </span>
+        severity <span style={{ color: tone.color }}>{audit.overall_severity}</span>
+        {' → '}
+        <span style={{ color: tone.color, fontWeight: 700 }}>{tone.action}</span>
+      </div>
+    </Card>
+  )
+}
+
+function ScoreHeadline({
+  score, headline, severity, reason, color,
+}: {
+  score: number | null
+  headline: string
+  severity: string
+  reason: string
+  color: string
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+      <div style={{
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', minWidth: 44,
+      }}>
+        <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 6, color: '#5A4A8A', letterSpacing: '0.16em' }}>
+          RISK
+        </span>
+        <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 18, color, lineHeight: 1.2 }}>
+          {score ?? '—'}
+        </span>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 9, color, letterSpacing: '0.06em' }}>
+          {headline}
+        </div>
+        <div style={{ fontSize: 9, color: '#5A4A8A', marginTop: 3 }}>
+          {String(severity).toUpperCase()} · {reason}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SeverityChips({ severities }: { severities: Severity[] }) {
+  const counts = countBySeverity(severities)
+  return (
+    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+      {counts.map(c => (
+        <span key={c.sev} style={{
+          fontFamily: "'Press Start 2P', monospace", fontSize: 7,
+          padding: '3px 7px', borderRadius: 3,
+          color: severityColor(c.sev),
+          border: `1px solid ${severityColor(c.sev)}`,
+          background: `${severityColor(c.sev)}14`,
+          letterSpacing: '0.06em',
+        }}>
+          {c.count} {c.sev.toUpperCase()}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+interface ActionsRowProps {
+  ctaLabel: string
+  ctaColor: string
+  onCta: () => void
+  preResult?: PreflightResponse
+  postSubject?: { txHash: string; scenarioLabel: string; subjectAddress: string }
+  postResult?: PostAuditReport
+}
+
+function ActionsRow({ ctaLabel, ctaColor, preResult, postSubject, postResult }: ActionsRowProps) {
   const navigate = useNavigate()
   const { hide } = useAuditModal()
-  const tone = verdictTone(result.verdict)
+
+  const goReport = () => {
+    if (preResult) navigate('/audit/pre', { state: { audit: preResult } })
+    else if (postResult) navigate('/audit/post', {
+      state: { audit: postResult, txHash: postSubject?.txHash, subject: postSubject?.subjectAddress },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
       <button
-        onClick={() => navigate('/audit/pre', { state: { audit: result } })}
+        onClick={goReport}
         style={{
           flex: 1, height: 36, cursor: 'pointer',
-          background: `${tone.color}1f`, border: `1.5px solid ${tone.color}`,
-          color: tone.color, borderRadius: 6,
+          background: `${ctaColor}1f`, border: `1.5px solid ${ctaColor}`,
+          color: ctaColor, borderRadius: 6,
           fontFamily: "'Press Start 2P', monospace", fontSize: 7,
           letterSpacing: '0.08em',
         }}
       >
-        → REPORT
+        {ctaLabel}
       </button>
       <button
         onClick={hide}
@@ -405,28 +524,34 @@ function countBySeverity(severities: Severity[]) {
     .filter(c => c.count > 0)
 }
 
-function verdictTone(verdict: PreflightResponse['verdict']) {
-  if (verdict === 'safe') {
+function preVerdictTone(verdict: PreflightResponse['verdict']) {
+  if (verdict === 'safe')    return { color: '#A8FF3E', titleSuffix: 'ALLOW',  headline: '✓ AGENT SIGNED',   narrative: 'No medium-or-higher risks detected. Agent will sign the x402 payment and proceed.' }
+  if (verdict === 'warning') return { color: '#FFE600', titleSuffix: 'REVIEW', headline: '⚠ MANUAL REVIEW',  narrative: 'Source unverified or analyzer skipped. Agent paused for explicit human confirmation.' }
+  return                     { color: '#FF4444', titleSuffix: 'BLOCK',  headline: '✕ PAYMENT HALTED', narrative: 'AEGIS402 detected medium-or-higher findings. Agent did NOT sign — payment is halted.' }
+}
+
+function postSeverityTone(sev: PostAuditReport['overall_severity']) {
+  if (sev === 'high' || sev === 'critical') {
     return {
-      color: '#A8FF3E',
-      titleSuffix: 'ALLOW',
-      headline: '✓ AGENT SIGNED',
-      narrative: 'No medium-or-higher risks detected. Agent will sign the x402 payment and proceed.',
+      color: '#FF4444', titleSuffix: 'BLOCK_AND_CLAIM',
+      headline: '✕ ESCROW BLOCKED', short: 'high-risk settlement',
+      action: 'BLOCK_AND_CLAIM',
+      narrative: 'Output materially below expected. Escrow blocks settlement; insurance pool refunds the user input principal.',
     }
   }
-  if (verdict === 'warning') {
+  if (sev === 'medium') {
     return {
-      color: '#FFE600',
-      titleSuffix: 'REVIEW',
-      headline: '⚠ MANUAL REVIEW',
-      narrative: 'Source unverified or analyzer skipped. Agent paused for explicit human confirmation.',
+      color: '#FFE600', titleSuffix: 'REVIEW',
+      headline: '⚠ MANUAL REVIEW',  short: 'mild slippage',
+      action: 'RELEASE (with warning)',
+      narrative: 'Mild signal — auto-release with warning. Production should require human review before settling.',
     }
   }
   return {
-    color: '#FF4444',
-    titleSuffix: 'BLOCK',
-    headline: '✕ PAYMENT HALTED',
-    narrative: 'AEGIS402 detected medium-or-higher findings. Agent did NOT sign — payment is halted.',
+    color: '#A8FF3E', titleSuffix: 'RELEASE',
+    headline: '✓ ESCROW RELEASED', short: 'clean settlement',
+    action: 'RELEASE',
+    narrative: 'Clean execution. Escrow releases the swap output to the user as expected.',
   }
 }
 

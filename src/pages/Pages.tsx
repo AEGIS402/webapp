@@ -1,32 +1,66 @@
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { DashboardLayout } from './DashboardLayout'
 import { AuditList } from '../components/audit/AuditList'
 import { PreAuditLiveView } from '../components/audit/PreAuditLiveView'
-import { VaultCards } from '../components/escrow/VaultCards'
+import { PostAuditLiveView } from '../components/audit/PostAuditLiveView'
+import { EscrowList } from '../components/escrow/EscrowList'
+import { EscrowDetailView } from '../components/escrow/EscrowDetailView'
 import { HookGrid } from '../components/integrations/HookGrid'
+import { useEscrowHistory, EscrowHistoryEntry } from '../state/escrowHistory'
+import { ESCROW_FIXTURES } from '../data/escrow-fixtures'
 import type { PreflightResponse } from '../types/preaudit'
+import type { PostAuditReport } from '../types/postaudit'
 
 interface AuditPageProps {
   initialTab?: 'pre' | 'post'
 }
 
-interface AuditLocationState {
+interface PreAuditLocationState {
   audit?: PreflightResponse
+}
+
+interface PostAuditLocationState {
+  audit?: PostAuditReport
+  txHash?: string
+  subject?: string
+  chainId?: number
 }
 
 export function AuditPage({ initialTab = 'pre' }: AuditPageProps) {
   const isPost = initialTab === 'post'
   const location = useLocation()
-  const liveAudit = !isPost ? (location.state as AuditLocationState | null)?.audit : undefined
 
-  const subtitle = isPost
-    ? 'Post-Audit Analysis · Slippage Detection'
-    : liveAudit
+  if (isPost) {
+    const state = (location.state as PostAuditLocationState | null) ?? null
+    const audit = state?.audit
+    const subtitle = audit
+      ? `Live Post-Audit · ${audit.overall_severity.toUpperCase()} · score ${audit.overall_risk_score}`
+      : 'Post-Audit Analysis · Slippage Detection'
+    const badgeColor = audit
+      ? (audit.overall_severity === 'high' || audit.overall_severity === 'critical' ? 'red'
+        : audit.overall_severity === 'medium' ? 'yellow' : 'green')
+      : 'yellow'
+    return (
+      <DashboardLayout
+        title="Audit"
+        subtitle={subtitle}
+        badgeColor={badgeColor}
+        escrowActive
+      >
+        {audit
+          ? <PostAuditLiveView audit={audit} txHash={state?.txHash} subject={state?.subject} chainId={state?.chainId} />
+          : <AuditList initialTab="post" />}
+      </DashboardLayout>
+    )
+  }
+
+  const state = (location.state as PreAuditLocationState | null) ?? null
+  const liveAudit = state?.audit
+  const subtitle = liveAudit
     ? `Live Pre-Audit · ${liveAudit.verdict.toUpperCase()} · ${liveAudit.to}`
     : 'Contract Audit Log · Local LLM'
-
-  const badgeColor = isPost ? 'yellow'
-    : liveAudit?.verdict === 'unsafe' ? 'red'
+  const badgeColor = liveAudit?.verdict === 'unsafe' ? 'red'
     : liveAudit?.verdict === 'warning' ? 'yellow'
     : 'green'
 
@@ -35,24 +69,83 @@ export function AuditPage({ initialTab = 'pre' }: AuditPageProps) {
       title="Audit"
       subtitle={subtitle}
       badgeColor={badgeColor}
-      escrowActive={isPost}
     >
-      {liveAudit ? <PreAuditLiveView data={liveAudit} /> : <AuditList initialTab={initialTab} />}
+      {liveAudit ? <PreAuditLiveView data={liveAudit} /> : <AuditList initialTab="pre" />}
     </DashboardLayout>
   )
 }
 
+interface EscrowLocationState {
+  entryId?: string
+}
+
 export function EscrowPage() {
+  const location = useLocation()
+  const { entries, getById } = useEscrowHistory()
+  const [showExample, setShowExample] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // On mount or state change, prefer router-state entryId, then first real entry, then example
+  useEffect(() => {
+    const stateId = (location.state as EscrowLocationState | null)?.entryId
+    if (stateId && getById(stateId)) {
+      setSelectedId(stateId)
+      return
+    }
+    if (entries.length > 0) {
+      setSelectedId(entries[0].id)
+      return
+    }
+    if (showExample) {
+      setSelectedId('example-sandwich')
+    }
+  }, [location.state, entries, showExample, getById])
+
+  const selectedEntry: EscrowHistoryEntry | null = selectedId
+    ? getById(selectedId) ?? exampleById(selectedId)
+    : null
+
+  const subtitle = selectedEntry
+    ? `tradeId ${selectedEntry.tradeId.slice(0, 10)}… · ${selectedEntry.chosenAction}`
+    : 'Audit-Responsive Escrow Standard · Sepolia'
+
+  const badge = selectedEntry?.chosenAction === 'BLOCK_AND_CLAIM' ? 'red'
+    : selectedEntry?.chosenAction === 'RELEASE' ? 'green'
+    : 'yellow'
+
   return (
     <DashboardLayout
       title="Escrow"
-      subtitle="Conditional Settlement · Post-Audit Hold"
-      badgeColor="yellow"
+      subtitle={subtitle}
+      badgeColor={badge}
       escrowActive
     >
-      <VaultCards />
+      <div style={{
+        display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14,
+        height: 'calc(100vh - 56px - 32px)', minHeight: 0,
+      }}>
+        <EscrowList
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          showExample={showExample}
+          onToggleExample={setShowExample}
+        />
+        <div style={{ overflowY: 'auto', minHeight: 0 }}>
+          <EscrowDetailView entry={selectedEntry} />
+        </div>
+      </div>
     </DashboardLayout>
   )
+}
+
+function exampleById(id: string): EscrowHistoryEntry | null {
+  if (id === 'example-sandwich') {
+    return { ...ESCROW_FIXTURES.sandwich, id, timestamp: Date.now(), source: 'fixture' }
+  }
+  if (id === 'example-normal') {
+    return { ...ESCROW_FIXTURES.normal, id, timestamp: Date.now(), source: 'fixture' }
+  }
+  return null
 }
 
 export function IntegrationsPage() {

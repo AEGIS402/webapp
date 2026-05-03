@@ -44,6 +44,88 @@ export const PRE_AUDIT_TARGETS: DemoTarget[] = [
 ]
 
 export const PRE_AUDIT_CHAIN_ID = 11155111
+export const POST_AUDIT_CHAIN_ID = 11155111
+
+export interface PostAuditTarget {
+  id: 'normal' | 'sandwich'
+  label: string
+  txHash: string
+  description: string
+  context: string  // narrative blurb for the card
+  color: string
+  expectedSeverity: 'info' | 'low' | 'medium' | 'high' | 'critical'
+}
+
+// Real Sepolia tx hashes from a recent e2e:escrow:live run.
+export const POST_AUDIT_TARGETS: PostAuditTarget[] = [
+  {
+    id: 'normal',
+    label: 'Normal protected swap',
+    txHash: '0x9c55902631bed51d5a37e205a0eb1fd86eb84be0f7293c6aaf6161b86869e946',
+    description: '100 USDT → ~99.5 AEGIS via protectedExactInputSingle (Sepolia)',
+    context: 'Clean execution. Audit should return info → escrow RELEASE.',
+    color: '#A8FF3E',
+    expectedSeverity: 'info',
+  },
+  {
+    id: 'sandwich',
+    label: 'Sandwich victim swap',
+    txHash: '0xbb146dc17fcce5294bb67fd3eebc57822ba157bb58e8b2c601006e5b3202c39e',
+    description: 'Victim 100 USDT → 73 AEGIS after MEV front-run + back-run (Sepolia)',
+    context: 'Output 26% short. Mock fallback used because the on-chain victim swap was settled with expectedOutput=0; re-run e2e with E2E_EXPECTED_OUTPUT=99 for true live high verdict.',
+    color: '#FF4444',
+    expectedSeverity: 'high',
+  },
+]
+
+export const SEPOLIA_EXPLORER = 'https://sepolia.etherscan.io'
+export const MAINNET_EXPLORER = 'https://etherscan.io'
+
+export type ChainName = 'mainnet' | 'sepolia'
+
+export function explorerForChain(chain: ChainName): string {
+  return chain === 'mainnet' ? MAINNET_EXPLORER : SEPOLIA_EXPLORER
+}
+
+// Live escrow-hook deployment on Sepolia (escrow-hook/deployments/sepolia-demo.json).
+export const ESCROW_DEPLOYMENT = {
+  vault:         '0x014A0A4239bE3450bab6A59bba32BecC9e372bc3',
+  insurancePool: '0xFEA84989fAF5ee2Ee0e6413A4F6b67e1d7d7F341',
+  hook:          '0x2d8b972f069D448040C4B8C3FfdD491fF25E8044',
+  adapter:       '0x78159564738C31B0D31982256bBbE81bEE9aBc09',
+  usdt:          '0xdEFf5dE317F4636498a58D7D7dd0bc9c178e816f',
+  aegis:         '0x788AAa4E8da43480d24FB900c6685274441DBBA0',
+} as const
+
+export type EscrowScenarioId = 'normal' | 'sandwich'
+
+export interface EscrowScenarioMeta {
+  id: EscrowScenarioId
+  label: string
+  badgeLabel: string
+  expectedAction: 'RELEASE' | 'BLOCK_AND_CLAIM'
+  color: string
+  description: string
+}
+
+export const ESCROW_SCENARIOS: EscrowScenarioMeta[] = [
+  {
+    id: 'normal',
+    label: 'NORMAL SWAP',
+    badgeLabel: '✓ EXPECT RELEASE',
+    expectedAction: 'RELEASE',
+    color: '#A8FF3E',
+    description: 'Clean execution. Audit returns info → vault releases AEGIS to the user.',
+  },
+  {
+    id: 'sandwich',
+    label: 'SANDWICH ATTACK',
+    badgeLabel: '✕ EXPECT BLOCK_AND_CLAIM',
+    expectedAction: 'BLOCK_AND_CLAIM',
+    color: '#FF4444',
+    description: 'MEV bot front-runs. Output 26% short of expected → block-and-claim, insurance refunds principal.',
+  },
+]
 
 export const WALLET_DATA = {
   name: 'jawgstar.eth',

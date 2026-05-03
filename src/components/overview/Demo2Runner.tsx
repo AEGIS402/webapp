@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PRE_AUDIT_TARGETS, DemoTarget, PRE_AUDIT_CHAIN_ID } from '../../constants/data'
-import { preflight } from '../../api/preaudit'
-import { PREAUDIT_MOCK_SAFE, PREAUDIT_MOCK_UNSAFE } from '../../data/preaudit-mocks'
-import { PreflightResponse, Severity } from '../../types/preaudit'
+import {
+  POST_AUDIT_TARGETS, PostAuditTarget,
+  POST_AUDIT_CHAIN_ID, SEPOLIA_EXPLORER,
+} from '../../constants/data'
+import { auditTx } from '../../api/postaudit'
+import { POSTAUDIT_MOCK_NORMAL, POSTAUDIT_MOCK_SANDWICH } from '../../data/postaudit-mocks'
+import { PostAuditReport, Severity } from '../../types/postaudit'
 import { MonitorCard, MonitorCardConfig, LogLine } from './MonitorCard'
 import { useAuditModal } from '../../state/auditModal'
 import { useAuditHistory } from '../../state/auditHistory'
@@ -11,18 +14,18 @@ import { useAuditHistory } from '../../state/auditHistory'
 type Phase = 'idle' | 'running' | 'done' | 'error'
 
 const tsNow = () => new Date().toTimeString().slice(0, 8)
-const short = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
+const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`
 
-const responseCache = new Map<string, PreflightResponse>()
-const cacheKey = (target: DemoTarget, useMock: boolean) =>
-  `${useMock ? 'mock' : 'live'}:${target.address}`
+const responseCache = new Map<string, PostAuditReport>()
+const cacheKey = (target: PostAuditTarget, useMock: boolean) =>
+  `${useMock ? 'mock' : 'live'}:${target.txHash}`
 
-export function Demo1Runner() {
-  const [target, setTarget] = useState<DemoTarget>(PRE_AUDIT_TARGETS[1])
+export function Demo2Runner() {
+  const [target, setTarget] = useState<PostAuditTarget>(POST_AUDIT_TARGETS[1])  // sandwich first by default
   const [useMock, setUseMock] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [logs, setLogs] = useState<LogLine[]>([])
-  const [result, setResult] = useState<PreflightResponse | null>(null)
+  const [result, setResult] = useState<PostAuditReport | null>(null)
   const [, setError] = useState<string | null>(null)
   const [elapsedSec, setElapsedSec] = useState(0)
 
@@ -67,6 +70,12 @@ export function Demo1Runner() {
     timersRef.current.push(id)
   }
 
+  const subjectMeta = (t: PostAuditTarget) => ({
+    txHash: t.txHash,
+    scenarioLabel: t.label,
+    subjectAddress: '',  // tx.from (resolved server-side via /audit/from-tx)
+  })
+
   const run = async () => {
     reset()
     setPhase('running')
@@ -76,21 +85,24 @@ export function Demo1Runner() {
 
     const cached = responseCache.get(cacheKey(target, useMock))
 
-    modal.show({ phase: 'running', mode: 'pre', target, stage: 'intercept', elapsedSec: 0, cached: !!cached })
+    modal.show({
+      phase: 'running', mode: 'post',
+      subject: subjectMeta(target),
+      stage: 'tx', elapsedSec: 0, cached: !!cached,
+    })
 
-    appendLog({ ts: tsNow(), text: `▶ Pre-audit triggered — target ${target.label} ${short(target.address)}`, color: '#F2E7FF' })
-    appendLog({ ts: '',      text: `   POST /api/preaudit/v1/tx/preflight  { to, chainId: ${PRE_AUDIT_CHAIN_ID} }`, color: '#5A4A8A' })
-
+    appendLog({ ts: tsNow(), text: `▶ Post-audit triggered — target ${target.label}`, color: '#F2E7FF' })
+    appendLog({ ts: '',      text: `   POST /api/postaudit/audit/from-tx  { tx_hash: ${short(target.txHash)} }`, color: '#5A4A8A' })
     if (cached) {
       appendLog({ ts: '', text: '   cached response — replaying instantly', color: '#7F77DD' })
     }
 
-    scheduleLog(700,  { ts: tsNow(), text: '→ eth_getCode on Sepolia — checking address type', color: '#378ADD' })
-    scheduleLog(1500, { ts: tsNow(), text: '→ etherscan getsourcecode — fetching verified source', color: '#378ADD' })
-    scheduleLog(2400, { ts: tsNow(), text: '→ analyzer call — gpt-oss-120b · risk-v1', color: '#378ADD' })
+    scheduleLog(700,  { ts: tsNow(), text: '→ eth_getTransactionByHash + receipt + block (Sepolia)', color: '#FF8A4D' })
+    scheduleLog(1500, { ts: tsNow(), text: '→ decode logs (Transfer / Approval / ProtectedSwapEscrowed)', color: '#FF8A4D' })
+    scheduleLog(2400, { ts: tsNow(), text: '→ analyzer call — gpt-oss-120b · risk-v1', color: '#FF8A4D' })
 
     timersRef.current.push(window.setTimeout(() => modal.setStage('rpc'),    700))
-    timersRef.current.push(window.setTimeout(() => modal.setStage('source'), 1500))
+    timersRef.current.push(window.setTimeout(() => modal.setStage('decode'), 1500))
     timersRef.current.push(window.setTimeout(() => modal.setStage('llm'),    2400))
 
     const tickId = window.setInterval(() => {
@@ -117,8 +129,8 @@ export function Demo1Runner() {
       const res = cached
         ? await replayCached(cached)
         : useMock
-          ? await mockPreflight(target)
-          : await preflight(target.address, { signal: controller.signal, chainId: PRE_AUDIT_CHAIN_ID })
+          ? await mockAudit(target)
+          : await auditTx(target.txHash, { signal: controller.signal })
 
       if (controller.signal.aborted) return
       clearAllTimers()
@@ -128,11 +140,16 @@ export function Demo1Runner() {
       responseCache.set(cacheKey(target, useMock), res)
       setResult(res)
       setPhase('done')
-      modal.finishPre(target, res, finalElapsed)
+      modal.finishPost(subjectMeta(target), res, finalElapsed)
       history.push({
-        kind: 'pre',
-        target, result: res, elapsedSec: finalElapsed,
-        cached: !!cached, source: useMock ? 'mock' : 'live',
+        kind: 'post',
+        txHash: target.txHash,
+        subjectAddress: '',
+        scenarioLabel: target.label,
+        result: res,
+        elapsedSec: finalElapsed,
+        cached: !!cached,
+        source: useMock ? 'fixture' : 'live',
       })
       appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s`, color: '#5A4A8A' })
       appendVerdictLogs(res, appendLog)
@@ -144,14 +161,20 @@ export function Demo1Runner() {
       const message = err instanceof Error ? err.message : 'unknown error'
       setError(message)
       setPhase('error')
-      modal.failPre(target, message, finalElapsed)
+      modal.failPost(subjectMeta(target), message, finalElapsed)
       history.push({
-        kind: 'pre',
-        target, result: null, error: message, elapsedSec: finalElapsed,
-        cached: !!cached, source: useMock ? 'mock' : 'live',
+        kind: 'post',
+        txHash: target.txHash,
+        subjectAddress: '',
+        scenarioLabel: target.label,
+        result: null,
+        error: message,
+        elapsedSec: finalElapsed,
+        cached: !!cached,
+        source: useMock ? 'fixture' : 'live',
       })
-      appendLog({ ts: tsNow(), text: `✕ pre-audit call failed — ${message}`, color: '#FF4444' })
-      appendLog({ ts: '',      text: '   tip: enable USE MOCK toggle to fall back to a captured response', color: '#5A4A8A' })
+      appendLog({ ts: tsNow(), text: `✕ post-audit call failed — ${message}`, color: '#FF4444' })
+      appendLog({ ts: '',      text: '   tip: enable USE MOCK toggle for the captured response', color: '#5A4A8A' })
     }
   }
 
@@ -170,14 +193,14 @@ export function Demo1Runner() {
         elapsedSec={elapsedSec}
       />
       <MonitorCard override={cfg} />
-      {phase === 'done' && result && <ResultPanel result={result} />}
+      {phase === 'done' && result && <ResultPanel result={result} target={target} />}
     </div>
   )
 }
 
 interface ControlBarProps {
-  target: DemoTarget
-  onTargetChange: (t: DemoTarget) => void
+  target: PostAuditTarget
+  onTargetChange: (t: PostAuditTarget) => void
   useMock: boolean
   onUseMockChange: (v: boolean) => void
   onRun: () => void
@@ -186,7 +209,10 @@ interface ControlBarProps {
   elapsedSec: number
 }
 
-function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, onReset, phase, elapsedSec }: ControlBarProps) {
+function ControlBar({
+  target, onTargetChange, useMock, onUseMockChange,
+  onRun, onReset, phase, elapsedSec,
+}: ControlBarProps) {
   const running = phase === 'running'
   const done = phase === 'done'
 
@@ -196,24 +222,22 @@ function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, o
       borderRadius: 10, padding: 14,
       display: 'flex', flexDirection: 'column', gap: 12,
     }}>
-      {/* Heading row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{
           fontFamily: "'Press Start 2P', monospace", fontSize: 8,
-          color: '#7F77DD', letterSpacing: '0.12em',
+          color: '#FF8A4D', letterSpacing: '0.12em',
         }}>
-          DEMO 1 · X402 PRE-AUDIT
+          DEMO 2 · POST-TX AUDIT
         </span>
         <span style={{ fontSize: 10, color: '#5A4A8A' }}>
-          Pick a hook to audit, then run. Result will jump to the full report.
+          Pick a settled tx, run the audit, jump to the full report.
         </span>
         <span style={{ flex: 1 }} />
         <MockToggle value={useMock} onChange={onUseMockChange} disabled={running} />
       </div>
 
-      {/* Target picker */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {PRE_AUDIT_TARGETS.map(t => (
+        {POST_AUDIT_TARGETS.map(t => (
           <TargetCard
             key={t.id}
             target={t}
@@ -224,33 +248,27 @@ function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, o
         ))}
       </div>
 
-      {/* Run / reset */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           onClick={onRun}
           disabled={running}
           style={{
             flex: 1, height: 44, cursor: running ? 'not-allowed' : 'pointer',
-            background: running ? 'rgba(55,138,221,0.12)' : 'rgba(46,122,0,0.18)',
-            border: `2px solid ${running ? '#378ADD' : '#A8FF3E'}`,
-            color: running ? '#378ADD' : '#A8FF3E',
+            background: running ? 'rgba(55,138,221,0.12)' : 'rgba(255,138,77,0.18)',
+            border: `2px solid ${running ? '#378ADD' : '#FF8A4D'}`,
+            color: running ? '#378ADD' : '#FF8A4D',
             borderRadius: 6,
             fontFamily: "'Press Start 2P', monospace",
             fontSize: 10, letterSpacing: '0.08em',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-            transition: 'all 0.15s',
           }}
         >
           {running ? (
-            <>
-              <PulsingDot color="#378ADD" />
-              RUNNING…
-              <span style={{ fontSize: 9, color: '#9B8EC4' }}>{elapsedSec}s</span>
-            </>
+            <>● RUNNING… <span style={{ fontSize: 9, color: '#9B8EC4' }}>{elapsedSec}s</span></>
           ) : done ? (
             '▶ RUN AGAIN'
           ) : (
-            '▶ RUN PRE-AUDIT'
+            '▶ RUN POST-AUDIT'
           )}
         </button>
         <button
@@ -259,12 +277,10 @@ function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, o
           style={{
             height: 44, padding: '0 16px',
             cursor: running || phase === 'idle' ? 'not-allowed' : 'pointer',
-            background: 'transparent',
-            border: '1px solid #2D1F5E',
-            color: '#5A4A8A',
-            borderRadius: 6,
-            fontFamily: "'Press Start 2P', monospace",
-            fontSize: 8, letterSpacing: '0.08em',
+            background: 'transparent', border: '1px solid #2D1F5E',
+            color: '#5A4A8A', borderRadius: 6,
+            fontFamily: "'Press Start 2P', monospace", fontSize: 8,
+            letterSpacing: '0.08em',
             opacity: running || phase === 'idle' ? 0.4 : 1,
           }}
         >
@@ -278,15 +294,14 @@ function ControlBar({ target, onTargetChange, useMock, onUseMockChange, onRun, o
 function TargetCard({
   target, selected, disabled, onSelect,
 }: {
-  target: DemoTarget
+  target: PostAuditTarget
   selected: boolean
   disabled: boolean
   onSelect: () => void
 }) {
-  const expectedVerdictColor = target.expectedVerdict === 'safe' ? '#A8FF3E' : '#FF4444'
-  const expectedLabel = target.expectedVerdict === 'safe' ? '✓ EXPECT SAFE' : '✕ EXPECT UNSAFE'
-  const etherscanUrl = `https://sepolia.etherscan.io/address/${target.address}`
-
+  const expectedColor = target.expectedSeverity === 'info' ? '#A8FF3E' : '#FF4444'
+  const expectedLabel = target.expectedSeverity === 'info' ? '✓ EXPECT INFO' : `✕ EXPECT ${target.expectedSeverity.toUpperCase()}`
+  const txUrl = `${SEPOLIA_EXPLORER}/tx/${target.txHash}`
   return (
     <div
       onClick={disabled ? undefined : onSelect}
@@ -295,8 +310,7 @@ function TargetCard({
         cursor: disabled ? 'not-allowed' : 'pointer',
         background: selected ? `${target.color}10` : '#13102E',
         border: `1.5px solid ${selected ? target.color : '#2D1F5E'}`,
-        borderRadius: 8,
-        padding: 12,
+        borderRadius: 8, padding: 12,
         display: 'flex', flexDirection: 'column', gap: 8,
         opacity: disabled && !selected ? 0.6 : 1,
         transition: 'all 0.15s',
@@ -320,9 +334,9 @@ function TargetCard({
           fontFamily: "'Press Start 2P', monospace", fontSize: 6,
           letterSpacing: '0.1em',
           padding: '3px 7px', borderRadius: 3,
-          color: expectedVerdictColor,
-          border: `1px solid ${expectedVerdictColor}`,
-          background: `${expectedVerdictColor}14`,
+          color: expectedColor,
+          border: `1px solid ${expectedColor}`,
+          background: `${expectedColor}14`,
         }}>
           {expectedLabel}
         </span>
@@ -331,7 +345,7 @@ function TargetCard({
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 11, color: '#9B8EC4', wordBreak: 'break-all',
       }}>
-        {target.address}
+        {target.txHash.slice(0, 22)}…{target.txHash.slice(-10)}
       </div>
       <div style={{
         fontSize: 10, color: '#5A4A8A', lineHeight: 1.5,
@@ -340,9 +354,7 @@ function TargetCard({
       </div>
       <div onClick={(e) => e.stopPropagation()}>
         <a
-          href={etherscanUrl}
-          target="_blank"
-          rel="noreferrer"
+          href={txUrl} target="_blank" rel="noreferrer"
           style={{
             fontSize: 9, color: '#7F77DD', textDecoration: 'none',
             padding: '3px 8px', borderRadius: 3,
@@ -384,36 +396,9 @@ function MockToggle({ value, onChange, disabled }: { value: boolean; onChange: (
   )
 }
 
-function PulsingDot({ color }: { color: string }) {
-  return (
-    <span style={{
-      width: 8, height: 8, borderRadius: '50%', background: color,
-      display: 'inline-block',
-      animation: 'demo1Pulse 1.2s ease-in-out infinite',
-    }}>
-      <style>{`
-        @keyframes demo1Pulse {
-          0%,100% { opacity: 1; transform: scale(1); }
-          50%      { opacity: 0.5; transform: scale(1.4); }
-        }
-      `}</style>
-    </span>
-  )
-}
-
-function ResultPanel({ result }: { result: PreflightResponse }) {
+function ResultPanel({ result, target }: { result: PostAuditReport; target: PostAuditTarget }) {
   const navigate = useNavigate()
-  const tone = result.verdict === 'safe'
-    ? { color: '#A8FF3E', label: '✓ SAFE TO PROCEED', cta: '→ View Report' }
-    : result.verdict === 'warning'
-    ? { color: '#FFE600', label: '⚠ MANUAL REVIEW REQUIRED', cta: '→ View Report' }
-    : { color: '#FF4444', label: '✕ PAYMENT HALTED',         cta: '→ View Vulnerabilities' }
-
-  const audit = result.audit
-  const score = audit?.overall_risk_score ?? null
-  const sev = audit?.overall_severity ?? '—'
-  const counts = audit ? severityCounts(audit.vulnerabilities.map(v => v.severity)) : null
-
+  const tone = severityTone(result.overall_severity)
   return (
     <div style={{
       background: '#0E0B22',
@@ -430,15 +415,13 @@ function ResultPanel({ result }: { result: PreflightResponse }) {
         }
       `}</style>
 
-      {/* Score */}
       <div style={{
         width: 120, flexShrink: 0,
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         background: '#13102E',
         border: `1px solid ${tone.color}`,
-        borderRadius: 8,
-        padding: 10,
+        borderRadius: 8, padding: 10,
       }}>
         <div style={{
           fontFamily: "'Press Start 2P', monospace", fontSize: 6,
@@ -447,7 +430,7 @@ function ResultPanel({ result }: { result: PreflightResponse }) {
           RISK
         </div>
         <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 28, color: tone.color, lineHeight: 1 }}>
-          {score ?? '—'}
+          {result.overall_risk_score}
         </div>
         <div style={{ fontSize: 9, color: '#5A4A8A', marginTop: 6 }}>/ 100</div>
         <div style={{
@@ -456,31 +439,30 @@ function ResultPanel({ result }: { result: PreflightResponse }) {
           color: tone.color, letterSpacing: '0.08em',
           border: `1px solid ${tone.color}`, borderRadius: 3,
         }}>
-          {sev.toUpperCase()}
+          {result.overall_severity.toUpperCase()}
         </div>
       </div>
 
-      {/* Mid */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{
           fontFamily: "'Press Start 2P', monospace", fontSize: 11,
           color: tone.color, letterSpacing: '0.06em',
         }}>
-          {tone.label}
+          {tone.headline}
         </div>
         <div style={{ fontSize: 11, color: '#9B8EC4', lineHeight: 1.6 }}>
-          {result.reason}
+          {result.overall_summary}
         </div>
-        {counts && (
+        {result.vulnerabilities.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-            {counts.map(c => (
+            {countBySeverity(result.vulnerabilities.map(v => v.severity)).map(c => (
               <span key={c.sev} style={{
                 fontSize: 9, padding: '3px 8px',
                 fontFamily: "'Press Start 2P', monospace", letterSpacing: '0.06em',
                 borderRadius: 3,
-                color: c.count > 0 ? severityColor(c.sev) : '#5A4A8A',
-                border: `1px solid ${c.count > 0 ? severityColor(c.sev) : '#2D1F5E'}`,
-                background: c.count > 0 ? `${severityColor(c.sev)}14` : 'transparent',
+                color: severityColor(c.sev),
+                border: `1px solid ${severityColor(c.sev)}`,
+                background: `${severityColor(c.sev)}14`,
               }}>
                 {c.count} {c.sev.toUpperCase()}
               </span>
@@ -489,23 +471,23 @@ function ResultPanel({ result }: { result: PreflightResponse }) {
         )}
       </div>
 
-      {/* CTA */}
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <button
-          onClick={() => navigate('/audit/pre', { state: { audit: result } })}
+          onClick={() => navigate('/audit/post', {
+            state: { audit: result, txHash: target.txHash, chainId: POST_AUDIT_CHAIN_ID },
+          })}
           style={{
             background: `${tone.color}1f`,
             border: `2px solid ${tone.color}`,
             color: tone.color,
-            borderRadius: 6,
-            padding: '14px 18px',
+            borderRadius: 6, padding: '14px 18px',
             cursor: 'pointer',
             fontFamily: "'Press Start 2P', monospace",
             fontSize: 9, letterSpacing: '0.08em',
             whiteSpace: 'nowrap',
           }}
         >
-          {tone.cta}
+          → View Report
         </button>
       </div>
     </div>
@@ -513,10 +495,10 @@ function ResultPanel({ result }: { result: PreflightResponse }) {
 }
 
 interface BuildArgs {
-  target: DemoTarget
+  target: PostAuditTarget
   phase: Phase
   logs: LogLine[]
-  result: PreflightResponse | null
+  result: PostAuditReport | null
   elapsedSec: number
 }
 
@@ -525,15 +507,15 @@ function buildMonitorConfig({ target, phase, logs, result, elapsedSec }: BuildAr
     ? `elapsed ${elapsedSec}s`
     : phase === 'done' && elapsedSec > 0
       ? `done in ${elapsedSec}s`
-      : `Sepolia · chain ${PRE_AUDIT_CHAIN_ID}`
+      : `Sepolia · chain ${POST_AUDIT_CHAIN_ID}`
 
   const agent = {
-    label: 'PRE-AUDIT AGENT',
-    target: `${target.label} · ${short(target.address)}`,
+    label: 'POST-AUDIT AGENT',
+    target: `${target.label} · ${short(target.txHash)}`,
     amount,
     accentColor: phase === 'done' && result
-      ? verdictAccent(result.verdict)
-      : phase === 'error' ? '#FF4444' : '#378ADD',
+      ? severityToAccent(result.overall_severity)
+      : phase === 'error' ? '#FF4444' : '#FF8A4D',
   }
 
   if (phase === 'idle') {
@@ -542,7 +524,7 @@ function buildMonitorConfig({ target, phase, logs, result, elapsedSec }: BuildAr
       nodes: ['done', 'wait', 'wait', 'wait'],
       connectors: ['gray', 'gray', 'gray'],
       logs: [
-        { ts: '—', text: 'Pick a target hook above and press RUN PRE-AUDIT to call /v1/tx/preflight.', color: '#5A4A8A' },
+        { ts: '—', text: 'Pick a settled tx above and press RUN POST-AUDIT.', color: '#5A4A8A' },
       ],
       agent,
     }
@@ -551,8 +533,8 @@ function buildMonitorConfig({ target, phase, logs, result, elapsedSec }: BuildAr
   if (phase === 'running') {
     return {
       status: 'PROCESSING', statusLabel: '● AUDITING',
-      nodes: ['done', 'active', 'wait', 'wait'],
-      connectors: ['green', 'blue', 'gray'],
+      nodes: ['done', 'done', 'done', 'active'],
+      connectors: ['green', 'green', 'blue'],
       logs,
       agent,
     }
@@ -561,8 +543,8 @@ function buildMonitorConfig({ target, phase, logs, result, elapsedSec }: BuildAr
   if (phase === 'error') {
     return {
       status: 'WARN', statusLabel: '⚠ ERROR',
-      nodes: ['done', 'warn', 'wait', 'wait'],
-      connectors: ['green', 'gray', 'gray'],
+      nodes: ['done', 'done', 'done', 'warn'],
+      connectors: ['green', 'green', 'gray'],
       logs,
       agent,
     }
@@ -571,90 +553,48 @@ function buildMonitorConfig({ target, phase, logs, result, elapsedSec }: BuildAr
   if (!result) {
     return {
       status: 'WARN', statusLabel: '⚠ NO RESULT',
-      nodes: ['done', 'warn', 'wait', 'wait'],
-      connectors: ['green', 'gray', 'gray'],
-      logs,
-      agent,
-    }
-  }
-
-  if (result.verdict === 'safe') {
-    return {
-      status: 'ALLOW', statusLabel: '✓ SAFE',
-      nodes: ['done', 'done', 'wait', 'wait'],
+      nodes: ['done', 'done', 'done', 'warn'],
       connectors: ['green', 'green', 'gray'],
       logs,
-      link: { text: '→ View Pre-Audit Report', to: '/audit/pre', state: { audit: result } },
       agent,
     }
   }
 
-  if (result.verdict === 'warning') {
+  const sev = result.overall_severity
+  if (sev === 'high' || sev === 'critical') {
     return {
-      status: 'WARN', statusLabel: '⚠ WARNING',
-      nodes: ['done', 'warn', 'wait', 'wait'],
-      connectors: ['green', 'gray', 'gray'],
+      status: 'BLOCK', statusLabel: '✕ HIGH RISK',
+      nodes: ['done', 'done', 'done', 'block'],
+      connectors: ['green', 'green', 'red'],
       logs,
-      link: { text: '→ View Pre-Audit Report', to: '/audit/pre', state: { audit: result } },
+      link: { text: '→ View Post-Audit Report', to: '/audit/post', state: { audit: result, txHash: target.txHash } },
       agent,
     }
   }
-
+  if (sev === 'medium') {
+    return {
+      status: 'WARN', statusLabel: '⚠ REVIEW',
+      nodes: ['done', 'done', 'done', 'warn'],
+      connectors: ['green', 'green', 'gray'],
+      logs,
+      link: { text: '→ View Post-Audit Report', to: '/audit/post', state: { audit: result, txHash: target.txHash } },
+      agent,
+    }
+  }
   return {
-    status: 'BLOCK', statusLabel: '✕ UNSAFE',
-    nodes: ['done', 'block', 'wait', 'wait'],
-    connectors: ['green', 'red', 'gray'],
+    status: 'ALLOW', statusLabel: '✓ CLEAN',
+    nodes: ['done', 'done', 'done', 'done'],
+    connectors: ['green', 'green', 'green'],
     logs,
-    link: { text: '→ View Pre-Audit Report', to: '/audit/pre', state: { audit: result } },
+    link: { text: '→ View Post-Audit Report', to: '/audit/post', state: { audit: result, txHash: target.txHash } },
     agent,
   }
 }
 
-function verdictAccent(verdict: 'safe' | 'warning' | 'unsafe') {
-  if (verdict === 'safe') return '#A8FF3E'
-  if (verdict === 'warning') return '#FFE600'
-  return '#FF4444'
-}
-
-function appendVerdictLogs(res: PreflightResponse, append: (l: LogLine) => void) {
-  const ts = tsNow()
-  const audit = res.audit
-
-  if (res.verdict === 'safe') {
-    append({ ts, text: `✓ verdict: safe — ${res.reason}`, color: '#A8FF3E' })
-    if (audit) {
-      append({ ts: '', text: `   risk: ${audit.overall_risk_score} / ${audit.overall_severity} · model: ${audit.model}`, color: '#5A4A8A' })
-    }
-    append({ ts: '', text: '   → ready to proceed with x402 payment (Demo 2 territory)', color: '#5A4A8A' })
-    return
-  }
-
-  if (res.verdict === 'warning') {
-    append({ ts, text: `⚠ verdict: warning — ${res.reason}`, color: '#FFE600' })
-    return
-  }
-
-  append({ ts, text: `✕ verdict: unsafe — ${res.reason}`, color: '#FF4444' })
-  if (audit) {
-    append({ ts: '', text: `   overall_risk_score: ${audit.overall_risk_score} (${audit.overall_severity}) · model: ${audit.model}`, color: '#FF4444' })
-    audit.vulnerabilities.slice(0, 3).forEach(v => {
-      append({ ts: '', text: `   • ${v.id} ${v.title} — ${v.severity}`, color: '#FF4444' })
-    })
-    if (audit.vulnerabilities.length > 3) {
-      append({ ts: '', text: `   • +${audit.vulnerabilities.length - 3} more — see Pre-Audit Report`, color: '#5A4A8A' })
-    }
-  }
-  append({ ts: '', text: '   → payment halted before signing', color: '#FF4444' })
-}
-
-async function mockPreflight(target: DemoTarget): Promise<PreflightResponse> {
-  await new Promise<void>(resolve => setTimeout(resolve, 2800))
-  return target.expectedVerdict === 'safe' ? PREAUDIT_MOCK_SAFE : PREAUDIT_MOCK_UNSAFE
-}
-
-async function replayCached(res: PreflightResponse): Promise<PreflightResponse> {
-  await new Promise<void>(resolve => setTimeout(resolve, 2800))
-  return res
+function severityToAccent(sev: Severity): string {
+  if (sev === 'high' || sev === 'critical') return '#FF4444'
+  if (sev === 'medium') return '#FFE600'
+  return '#A8FF3E'
 }
 
 function severityColor(sev: Severity): string {
@@ -667,10 +607,47 @@ function severityColor(sev: Severity): string {
   }
 }
 
-function severityCounts(severities: Severity[]) {
+function severityTone(sev: Severity) {
+  if (sev === 'high' || sev === 'critical') {
+    return { color: '#FF4444', headline: '✕ HIGH-RISK SETTLEMENT' }
+  }
+  if (sev === 'medium') {
+    return { color: '#FFE600', headline: '⚠ MANUAL REVIEW' }
+  }
+  return { color: '#A8FF3E', headline: '✓ CLEAN SETTLEMENT' }
+}
+
+function countBySeverity(severities: Severity[]) {
   const order: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
-  return order.map(sev => ({
-    sev,
-    count: severities.filter(s => s === sev).length,
-  }))
+  return order
+    .map(sev => ({ sev, count: severities.filter(s => s === sev).length }))
+    .filter(c => c.count > 0)
+}
+
+function appendVerdictLogs(res: PostAuditReport, append: (l: LogLine) => void) {
+  const ts = tsNow()
+  const sev = res.overall_severity
+  const color = severityToAccent(sev)
+  if (sev === 'high' || sev === 'critical') {
+    append({ ts, text: `✕ severity=${sev} · score ${res.overall_risk_score} — escrow would BLOCK_AND_CLAIM`, color })
+    res.vulnerabilities.slice(0, 3).forEach(v => {
+      append({ ts: '', text: `   • ${v.id} ${v.title} — ${v.severity}`, color })
+    })
+    return
+  }
+  if (sev === 'medium') {
+    append({ ts, text: `⚠ severity=medium · score ${res.overall_risk_score} — manual review`, color })
+    return
+  }
+  append({ ts, text: `✓ severity=${sev} · score ${res.overall_risk_score} — escrow would RELEASE`, color })
+}
+
+async function mockAudit(target: PostAuditTarget): Promise<PostAuditReport> {
+  await new Promise<void>(resolve => setTimeout(resolve, 2800))
+  return target.expectedSeverity === 'info' ? POSTAUDIT_MOCK_NORMAL : POSTAUDIT_MOCK_SANDWICH
+}
+
+async function replayCached(res: PostAuditReport): Promise<PostAuditReport> {
+  await new Promise<void>(resolve => setTimeout(resolve, 2800))
+  return res
 }
