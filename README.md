@@ -26,6 +26,32 @@ npm run build
 npm run preview
 ```
 
+## Deployment (GitHub Pages)
+
+The app uses [`HashRouter`](https://reactrouter.com/en/main/router-components/hash-router) so the same static `dist/` works on GitHub Pages without a custom 404 fallback. Asset URLs are emitted as relative paths (`base: './'`) so the bundle works whether it lives at the repo root or a subpath.
+
+Production builds have no Vite dev proxy, so the browser calls the backends directly and they must send `Access-Control-Allow-Origin: *` (both pre-audit and post-audit do this today).
+
+### Auto-deploy (recommended)
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds and publishes to Pages on every push to `main`. Set up once:
+
+1. **Repo Settings → Pages → Build and deployment → Source:** GitHub Actions.
+2. **Repo Settings → Secrets and variables → Actions → New repository secret:**
+   - `VITE_PREAUDIT_URL`  — full URL of the pre-audit backend (e.g. `http://<host>:13001`).
+   - `VITE_POSTAUDIT_URL` — full URL of the post-audit backend (e.g. `http://<host>:13000`).
+
+Push to `main` → GitHub Actions runs `npm ci && npm run build` with those secrets injected as `VITE_*` env vars and uploads `dist/` to Pages.
+
+### Manual build
+
+```bash
+VITE_PREAUDIT_URL=http://<host>:13001 \
+VITE_POSTAUDIT_URL=http://<host>:13000 \
+  npm run build
+# serve dist/ from any static host
+```
+
 ## Backend Servers
 
 The webapp talks to two backends through the Vite dev proxy. Targets come from `.env`:
@@ -89,7 +115,7 @@ All three scenarios share the same on-screen pattern: pick a target → press RU
 ```
 src/
 ├── App.tsx                          # <Routes> definition
-├── main.tsx                         # BrowserRouter + 4 providers (Wallet/EscrowHistory/AuditHistory/AuditModal)
+├── main.tsx                         # HashRouter + 4 providers (Wallet/EscrowHistory/AuditHistory/AuditModal)
 ├── index.css                        # Global styles + scanline overlay
 ├── vite-env.d.ts                    # ImportMetaEnv (VITE_PREAUDIT_URL / VITE_POSTAUDIT_URL)
 │
@@ -184,4 +210,3 @@ src/
 - **Theme** — Aegis Arcade: dark navy + neon accent + scanline overlay
 - **Severity colors** — critical `#FF4444` / high `#FF8A4D` / medium `#FFE600` / low `#7F77DD` / info `#A8FF3E`
 - **RISK score** — gauges and badges always show a `RISK` label with a "lower is safer · 0–19 info · 90+ critical" hint
-
