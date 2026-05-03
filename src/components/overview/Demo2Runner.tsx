@@ -187,7 +187,6 @@ export function Demo2Runner() {
         target={target}
         onTargetChange={setTarget}
         onRun={run}
-        onReset={reset}
         phase={phase}
         elapsedSec={elapsedSec}
       />
@@ -201,13 +200,12 @@ interface ControlBarProps {
   target: PostAuditTarget
   onTargetChange: (t: PostAuditTarget) => void
   onRun: () => void
-  onReset: () => void
   phase: Phase
   elapsedSec: number
 }
 
 function ControlBar({
-  target, onTargetChange, onRun, onReset, phase, elapsedSec,
+  target, onTargetChange, onRun, phase, elapsedSec,
 }: ControlBarProps) {
   const running = phase === 'running'
   const done = phase === 'done'
@@ -265,21 +263,6 @@ function ControlBar({
           ) : (
             '▶ RUN POST-AUDIT'
           )}
-        </button>
-        <button
-          onClick={onReset}
-          disabled={running || phase === 'idle'}
-          style={{
-            height: 44, padding: '0 16px',
-            cursor: running || phase === 'idle' ? 'not-allowed' : 'pointer',
-            background: 'transparent', border: '1px solid #2D1F5E',
-            color: '#5A4A8A', borderRadius: 6,
-            fontFamily: "'Press Start 2P', monospace", fontSize: 8,
-            letterSpacing: '0.08em',
-            opacity: running || phase === 'idle' ? 0.4 : 1,
-          }}
-        >
-          RESET
         </button>
       </div>
     </div>
