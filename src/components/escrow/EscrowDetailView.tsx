@@ -13,6 +13,7 @@ export function EscrowDetailView({ entry }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <Hero entry={entry} />
+      {entry.explainer && <ExplainerCard text={entry.explainer} />}
       <TradeSnapshot entry={entry} />
       <AuditDecision entry={entry} />
       <SettlementFlow entry={entry} />
@@ -28,6 +29,73 @@ export function EscrowDetailView({ entry }: Props) {
           </div>
         </>
       )}
+      {entry.narration && entry.narration.length > 0 && (
+        <NarrationCard lines={entry.narration} elapsedMs={entry.elapsedMs} />
+      )}
+    </div>
+  )
+}
+
+function ExplainerCard({ text }: { text: string }) {
+  return (
+    <div style={{
+      background: '#13102E', border: '1px solid #2D1F5E',
+      borderLeft: '3px solid #7F77DD', borderRadius: 8,
+      padding: '12px 14px',
+      fontSize: 12, color: '#F2E7FF', lineHeight: 1.7,
+    }}>
+      <div style={{
+        fontFamily: "'Press Start 2P', monospace", fontSize: 6,
+        color: '#7F77DD', letterSpacing: '0.14em', marginBottom: 8,
+      }}>
+        WHAT HAPPENED
+      </div>
+      {text}
+    </div>
+  )
+}
+
+function NarrationCard({ lines, elapsedMs }: { lines: string[]; elapsedMs?: number }) {
+  return (
+    <div style={{
+      background: '#0E0B22', border: '1px solid #2D1F5E',
+      borderLeft: '3px solid #FF8A4D', borderRadius: 8,
+      padding: '12px 14px',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+      }}>
+        <span style={{
+          fontFamily: "'Press Start 2P', monospace", fontSize: 7,
+          color: '#FF8A4D', letterSpacing: '0.14em',
+        }}>
+          AGENT NARRATION · {lines.length} STEPS
+        </span>
+        <span style={{ flex: 1 }} />
+        {elapsedMs != null && (
+          <span style={{
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: 9,
+            color: '#5A4A8A',
+          }}>
+            settled in {(elapsedMs / 1000).toFixed(1)}s
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {lines.map((line, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'baseline', gap: 8,
+            fontSize: 10.5, lineHeight: 1.55,
+            color: '#9B8EC4',
+            fontFamily: "'IBM Plex Mono', monospace",
+          }}>
+            <span style={{ color: '#5A4A8A', width: 22, flexShrink: 0, textAlign: 'right' }}>
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <span>{line}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -308,17 +376,26 @@ function ClaimDiagram({ entry }: { entry: EscrowHistoryEntry }) {
 }
 
 function BalancesTable({ entry }: { entry: EscrowHistoryEntry }) {
-  const rows: { actor: string; symbol: string; before: string; after: string }[] = [
-    { actor: 'USER',      symbol: 'USDT',  before: entry.balances.userUsdt.before,       after: entry.balances.userUsdt.after },
-    { actor: 'USER',      symbol: 'AEGIS', before: entry.balances.userAegis.before,      after: entry.balances.userAegis.after },
-    { actor: 'VAULT',     symbol: 'AEGIS', before: entry.balances.vaultAegis.before,     after: entry.balances.vaultAegis.after },
-    { actor: 'INSURANCE', symbol: 'USDT',  before: entry.balances.insuranceUsdt.before,  after: entry.balances.insuranceUsdt.after },
-    { actor: 'INSURANCE', symbol: 'AEGIS', before: entry.balances.insuranceAegis.before, after: entry.balances.insuranceAegis.after },
+  const rows: { actor: string; symbol: string; current: string; note?: string; noteColor?: string }[] = [
+    { actor: 'USER',      symbol: 'USDT',  current: entry.balances.userUsdt },
+    { actor: 'USER',      symbol: 'AEGIS', current: entry.balances.userAegis,
+      note: entry.chosenAction === 'BLOCK_AND_CLAIM' ? 'escrowed output recovered' : undefined,
+      noteColor: '#FF8A4D' },
+    { actor: 'VAULT',     symbol: 'AEGIS', current: entry.balances.vaultAegis,
+      note: entry.finalEscrowState === 'Released'  ? 'released to user' :
+            entry.finalEscrowState === 'ClaimPaid' ? 'forwarded to insurance' : undefined,
+      noteColor: entry.finalEscrowState === 'Released' ? '#A8FF3E' : '#FF8A4D' },
+    { actor: 'INSURANCE', symbol: 'USDT',  current: entry.balances.insuranceUsdt,
+      note: entry.chosenAction === 'BLOCK_AND_CLAIM' ? `−${entry.amountIn} refund + protection fee` : '+protection fee',
+      noteColor: entry.chosenAction === 'BLOCK_AND_CLAIM' ? '#FF4444' : '#A8FF3E' },
+    { actor: 'INSURANCE', symbol: 'AEGIS', current: entry.balances.insuranceAegis,
+      note: entry.chosenAction === 'BLOCK_AND_CLAIM' ? `+${parseFloat(entry.pendingOutputAegis).toFixed(2)} recovered` : undefined,
+      noteColor: '#A8FF3E' },
   ]
   return (
-    <Section title="BALANCES" accent="#7F77DD">
+    <Section title="BALANCES · POST-DECISION" accent="#7F77DD">
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr',
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr 2fr',
         gap: 0, fontSize: 9,
         fontFamily: "'Press Start 2P', monospace",
         color: '#5A4A8A', letterSpacing: '0.12em',
@@ -327,32 +404,29 @@ function BalancesTable({ entry }: { entry: EscrowHistoryEntry }) {
       }}>
         <span>ACTOR</span>
         <span>TOKEN</span>
-        <span style={{ textAlign: 'right' }}>BEFORE</span>
-        <span style={{ textAlign: 'right' }}>AFTER</span>
-        <span style={{ textAlign: 'right' }}>Δ</span>
+        <span style={{ textAlign: 'right' }}>CURRENT</span>
+        <span style={{ textAlign: 'right' }}>NOTE</span>
       </div>
-      {rows.map((r, i) => {
-        const beforeNum = parseFloat(r.before)
-        const afterNum = parseFloat(r.after)
-        const delta = afterNum - beforeNum
-        const deltaStr = delta === 0 ? '±0' : delta > 0 ? `+${delta.toFixed(2)}` : delta.toFixed(2)
-        const deltaColor = delta === 0 ? '#5A4A8A' : delta > 0 ? '#A8FF3E' : '#FF4444'
-        return (
-          <div key={i} style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr',
-            gap: 0, fontSize: 10,
-            padding: '8px 10px',
-            borderBottom: i === rows.length - 1 ? 'none' : '1px solid rgba(45,31,94,0.4)',
-            fontFamily: "'IBM Plex Mono', monospace",
+      {rows.map((r, i) => (
+        <div key={i} style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr 2fr',
+          gap: 0, fontSize: 10,
+          padding: '8px 10px',
+          borderBottom: i === rows.length - 1 ? 'none' : '1px solid rgba(45,31,94,0.4)',
+          fontFamily: "'IBM Plex Mono', monospace",
+        }}>
+          <span style={{ color: '#9B8EC4' }}>{r.actor}</span>
+          <span style={{ color: '#7F77DD' }}>{r.symbol}</span>
+          <span style={{ color: '#F2E7FF', textAlign: 'right' }}>{fmtBal(r.current)}</span>
+          <span style={{
+            color: r.noteColor ?? '#5A4A8A',
+            textAlign: 'right', fontSize: 9,
+            fontFamily: 'inherit',
           }}>
-            <span style={{ color: '#9B8EC4' }}>{r.actor}</span>
-            <span style={{ color: '#7F77DD' }}>{r.symbol}</span>
-            <span style={{ color: '#5A4A8A', textAlign: 'right' }}>{fmtBal(r.before)}</span>
-            <span style={{ color: '#F2E7FF', textAlign: 'right' }}>{fmtBal(r.after)}</span>
-            <span style={{ color: deltaColor, textAlign: 'right', fontWeight: 700 }}>{deltaStr}</span>
-          </div>
-        )
-      })}
+            {r.note ?? '—'}
+          </span>
+        </div>
+      ))}
     </Section>
   )
 }

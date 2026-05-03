@@ -3,9 +3,10 @@ import { BadgeColor } from '../constants/data'
 import { DashboardLayout } from './DashboardLayout'
 import { Demo1Runner } from '../components/overview/Demo1Runner'
 import { Demo2Runner } from '../components/overview/Demo2Runner'
+import { Demo3Runner } from '../components/escrow/Demo3Runner'
 import { AuditHistory } from '../components/overview/AuditHistory'
 
-type ScenarioId = 'pre-audit' | 'post-audit'
+type ScenarioId = 'pre-audit' | 'post-audit' | 'escrow'
 
 interface ScenarioMeta {
   id: ScenarioId
@@ -17,6 +18,7 @@ interface ScenarioMeta {
 const SCENARIOS: ScenarioMeta[] = [
   { id: 'pre-audit',  label: 'SCENARIO 1 · X402 PRE-AUDIT',  badge: 'green',  color: '#A8FF3E' },
   { id: 'post-audit', label: 'SCENARIO 2 · POST-TX AUDIT',   badge: 'red',    color: '#FF8A4D' },
+  { id: 'escrow',     label: 'SCENARIO 3 · INSURED ESCROW',  badge: 'yellow', color: '#FFE600' },
 ]
 
 export function Overview() {
@@ -30,7 +32,11 @@ export function Overview() {
       badgeColor={meta.badge}
     >
       <ScenarioToggle current={scenario} onChange={setScenario} />
-      {scenario === 'pre-audit' ? <Demo1Runner /> : <Demo2Runner />}
+      {scenario === 'pre-audit'
+        ? <Demo1Runner />
+        : scenario === 'post-audit'
+        ? <Demo2Runner />
+        : <Demo3Runner />}
       <div style={{ marginTop: 12 }}>
         <AuditHistory />
       </div>

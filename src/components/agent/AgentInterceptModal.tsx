@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom'
-import { AuditStage, AuditModalState, useAuditModal } from '../../state/auditModal'
+import { AuditStage, AuditModalState, useAuditModal, EscrowSubject, PostAuditSubject } from '../../state/auditModal'
 import { DemoTarget } from '../../constants/data'
 import { PreflightResponse, Severity } from '../../types/preaudit'
 import type { PostAuditReport } from '../../types/postaudit'
+import type { EscrowHistoryEntry } from '../../state/escrowHistory'
 
 const PRE_STAGES: { key: AuditStage; label: string; sub: string }[] = [
   { key: 'intercept', label: 'Payment intercepted', sub: 'x402 request paused before signing' },
@@ -16,6 +17,13 @@ const POST_STAGES: { key: AuditStage; label: string; sub: string }[] = [
   { key: 'rpc',    label: 'RPC tx + receipt',         sub: 'eth_getTransactionByHash · receipt · block' },
   { key: 'decode', label: 'Decode logs + asset flows', sub: 'Transfer / Approval / ProtectedSwapEscrowed' },
   { key: 'llm',    label: 'LLM analysis',             sub: 'gpt-oss-120b · risk-v1' },
+]
+
+const ESCROW_STAGES: { key: AuditStage; label: string; sub: string }[] = [
+  { key: 'mint',     label: 'Mint + approve',  sub: 'fund the trader, approve PoolSwapTest / adapter' },
+  { key: 'swap',     label: 'Protected swap',  sub: 'protectedExactInputSingle (sandwich: front-run / back-run)' },
+  { key: 'audit',    label: 'Post-audit',      sub: 'gpt-oss-120b reviews the swap receipt' },
+  { key: 'decision', label: 'Auditor decision', sub: 'executeAuditDecision: RELEASE / BLOCK_AND_CLAIM' },
 ]
 
 export function AgentInterceptModal() {
@@ -129,16 +137,32 @@ function RunningView({ state }: { state: Extract<AuditModalState, { phase: 'runn
       </ModalShell>
     )
   }
+  if (state.mode === 'post') {
+    return (
+      <ModalShell
+        accent="#FF8A4D"
+        title="AEGIS402 · POST-AUDIT"
+        subtitle={`auditing ${short(state.subject.txHash)}`}
+      >
+        <PostSubjectCard subject={state.subject} />
+        <StagesCard stages={POST_STAGES} stage={state.stage} elapsedSec={state.elapsedSec} cached={state.cached} />
+        <NarrativeBox color="#FF8A4D">
+          Swap settled. AEGIS402 is reviewing the tx receipt to decide RELEASE vs BLOCK_AND_CLAIM on the escrow.
+        </NarrativeBox>
+      </ModalShell>
+    )
+  }
+  // escrow
   return (
     <ModalShell
-      accent="#FF8A4D"
-      title="AEGIS402 · POST-AUDIT"
-      subtitle={`auditing ${short(state.subject.txHash)}`}
+      accent="#FFE600"
+      title="AEGIS402 · ESCROW SETTLE"
+      subtitle={`scenario ${state.subject.scenarioLabel}`}
     >
-      <PostSubjectCard subject={state.subject} />
-      <StagesCard stages={POST_STAGES} stage={state.stage} elapsedSec={state.elapsedSec} cached={state.cached} />
-      <NarrativeBox color="#FF8A4D">
-        Swap settled. AEGIS402 is reviewing the tx receipt to decide RELEASE vs BLOCK_AND_CLAIM on the escrow.
+      <EscrowSubjectCard subject={state.subject} />
+      <StagesCard stages={ESCROW_STAGES} stage={state.stage} elapsedSec={state.elapsedSec} cached={state.cached} />
+      <NarrativeBox color="#FFE600">
+        AEGIS402 is settling a protected swap end-to-end on Sepolia: trader mint, protected swap, post-audit, then the auditor signs RELEASE or BLOCK_AND_CLAIM.
       </NarrativeBox>
     </ModalShell>
   )
@@ -165,22 +189,43 @@ function DoneView({ state }: { state: Extract<AuditModalState, { phase: 'done' }
       </ModalShell>
     )
   }
-  const tone = postSeverityTone(state.result.overall_severity)
+  if (state.mode === 'post') {
+    const tone = postSeverityTone(state.result.overall_severity)
+    return (
+      <ModalShell
+        accent={tone.color}
+        title={`AEGIS402 · ${tone.titleSuffix}`}
+        subtitle={`post-audit complete · ${state.elapsedSec}s`}
+      >
+        <PostSubjectCard subject={state.subject} dim />
+        <PostVerdictCard audit={state.result} />
+        <NarrativeBox color={tone.color}>{tone.narrative}</NarrativeBox>
+        <ActionsRow
+          ctaLabel="→ REPORT"
+          ctaColor={tone.color}
+          onCta={() => null}
+          postSubject={state.subject}
+          postResult={state.result}
+        />
+      </ModalShell>
+    )
+  }
+  // escrow
+  const tone = escrowTone(state.entry.chosenAction)
   return (
     <ModalShell
       accent={tone.color}
       title={`AEGIS402 · ${tone.titleSuffix}`}
-      subtitle={`post-audit complete · ${state.elapsedSec}s`}
+      subtitle={`escrow settled · ${state.elapsedSec}s`}
     >
-      <PostSubjectCard subject={state.subject} dim />
-      <PostVerdictCard audit={state.result} />
-      <NarrativeBox color={tone.color}>{tone.narrative}</NarrativeBox>
+      <EscrowSubjectCard subject={state.subject} dim />
+      <EscrowVerdictCard entry={state.entry} />
+      <NarrativeBox color={tone.color}>{tone.narrative(state.entry)}</NarrativeBox>
       <ActionsRow
-        ctaLabel="→ REPORT"
+        ctaLabel="→ ESCROW DETAIL"
         ctaColor={tone.color}
         onCta={() => null}
-        postSubject={state.subject}
-        postResult={state.result}
+        escrowEntryId={state.entry.id}
       />
     </ModalShell>
   )
@@ -189,16 +234,18 @@ function DoneView({ state }: { state: Extract<AuditModalState, { phase: 'done' }
 function ErrorView({ state }: { state: Extract<AuditModalState, { phase: 'error' }> }) {
   const subtitle = state.mode === 'pre'
     ? `pre-audit failed · ${state.elapsedSec}s`
-    : `post-audit failed · ${state.elapsedSec}s`
+    : state.mode === 'post'
+    ? `post-audit failed · ${state.elapsedSec}s`
+    : `escrow scenario failed · ${state.elapsedSec}s`
   return (
     <ModalShell
       accent="#FFE600"
       title="AEGIS402 · ERROR"
       subtitle={subtitle}
     >
-      {state.mode === 'pre'
-        ? <PreSubjectCard target={state.target} dim />
-        : <PostSubjectCard subject={state.subject} dim />}
+      {state.mode === 'pre' && <PreSubjectCard target={state.target} dim />}
+      {state.mode === 'post' && <PostSubjectCard subject={state.subject} dim />}
+      {state.mode === 'escrow' && <EscrowSubjectCard subject={state.subject} dim />}
       <div style={{
         background: '#13102E', border: '1px solid #FFE600',
         borderLeft: '3px solid #FFE600',
@@ -225,13 +272,24 @@ function PreSubjectCard({ target, dim = false }: { target: DemoTarget; dim?: boo
   )
 }
 
-function PostSubjectCard({ subject, dim = false }: { subject: { txHash: string; scenarioLabel: string; subjectAddress: string }; dim?: boolean }) {
+function PostSubjectCard({ subject, dim = false }: { subject: PostAuditSubject; dim?: boolean }) {
   return (
     <Card label="POST-SETTLEMENT TX" dim={dim}>
       <Row k="scenario" v={subject.scenarioLabel} highlight />
       <Row k="tx hash"  v={short(subject.txHash)} mono />
       <Row k="subject"  v={short(subject.subjectAddress)} mono />
       <Row k="network"  v="Sepolia · 11155111" />
+    </Card>
+  )
+}
+
+function EscrowSubjectCard({ subject, dim = false }: { subject: EscrowSubject; dim?: boolean }) {
+  return (
+    <Card label="INSURED ESCROW SCENARIO" dim={dim}>
+      <Row k="scenario"  v={subject.scenarioLabel} highlight />
+      <Row k="vault"     v={short(subject.vault)} mono />
+      <Row k="insurance" v={short(subject.insurancePool)} mono />
+      <Row k="network"   v="Sepolia · 11155111" />
     </Card>
   )
 }
@@ -344,6 +402,37 @@ function PostVerdictCard({ audit }: { audit: PostAuditReport }) {
   )
 }
 
+function EscrowVerdictCard({ entry }: { entry: EscrowHistoryEntry }) {
+  const tone = escrowTone(entry.chosenAction)
+  const audit = entry.audit
+  return (
+    <Card label="VERDICT" accent={tone.color}>
+      <ScoreHeadline
+        score={audit.overall_risk_score}
+        headline={tone.headline}
+        severity={audit.overall_severity}
+        reason={tone.short(entry)}
+        color={tone.color}
+      />
+      {audit.vulnerabilities.length > 0 && (
+        <SeverityChips severities={audit.vulnerabilities.map(v => v.severity)} />
+      )}
+      <div style={{
+        marginTop: 8, padding: '8px 10px',
+        background: '#0A0818', border: '1px solid #2D1F5E', borderRadius: 6,
+        fontSize: 9.5, color: '#9B8EC4', lineHeight: 1.5,
+      }}>
+        <span style={{ color: '#5A4A8A', fontFamily: "'Press Start 2P', monospace", fontSize: 6, letterSpacing: '0.14em' }}>
+          ACTION{' '}
+        </span>
+        <span style={{ color: tone.color, fontWeight: 700 }}>{entry.chosenAction}</span>
+        {' · finalState '}
+        <span style={{ color: tone.color }}>{entry.finalEscrowState}</span>
+      </div>
+    </Card>
+  )
+}
+
 function ScoreHeadline({
   score, headline, severity, reason, color,
 }: {
@@ -405,9 +494,10 @@ interface ActionsRowProps {
   preResult?: PreflightResponse
   postSubject?: { txHash: string; scenarioLabel: string; subjectAddress: string }
   postResult?: PostAuditReport
+  escrowEntryId?: string
 }
 
-function ActionsRow({ ctaLabel, ctaColor, preResult, postSubject, postResult }: ActionsRowProps) {
+function ActionsRow({ ctaLabel, ctaColor, preResult, postSubject, postResult, escrowEntryId }: ActionsRowProps) {
   const navigate = useNavigate()
   const { hide } = useAuditModal()
 
@@ -416,6 +506,7 @@ function ActionsRow({ ctaLabel, ctaColor, preResult, postSubject, postResult }: 
     else if (postResult) navigate('/audit/post', {
       state: { audit: postResult, txHash: postSubject?.txHash, subject: postSubject?.subjectAddress },
     })
+    else if (escrowEntryId) navigate('/escrow', { state: { entryId: escrowEntryId } })
   }
 
   return (
@@ -553,6 +644,32 @@ function postSeverityTone(sev: PostAuditReport['overall_severity']) {
     action: 'RELEASE',
     narrative: 'Clean execution. Escrow releases the swap output to the user as expected.',
   }
+}
+
+function escrowTone(action: 'RELEASE' | 'BLOCK_AND_CLAIM') {
+  if (action === 'BLOCK_AND_CLAIM') {
+    return {
+      color: '#FF4444',
+      titleSuffix: 'BLOCK_AND_CLAIM',
+      headline: '✕ ESCROW BLOCKED',
+      short: (e: EscrowHistoryEntry) => `expected ${e.expectedOutput} → ${parseFloat(e.pendingOutputAegis).toFixed(2)} AEGIS`,
+      narrative: (e: EscrowHistoryEntry) => e.explainer ?? `Audit detected a ${shortfallText(e)} shortfall. Vault recovered the bad output and InsurancePool refunded the user's ${e.amountIn} USDT principal.`,
+    }
+  }
+  return {
+    color: '#A8FF3E',
+    titleSuffix: 'RELEASE',
+    headline: '✓ ESCROW RELEASED',
+    short: (e: EscrowHistoryEntry) => `released ${parseFloat(e.pendingOutputAegis).toFixed(2)} AEGIS to user`,
+    narrative: (e: EscrowHistoryEntry) => e.explainer ?? `Clean settlement. Vault released ${parseFloat(e.pendingOutputAegis).toFixed(2)} AEGIS to the user's settlement recipient.`,
+  }
+}
+
+function shortfallText(e: EscrowHistoryEntry): string {
+  const exp = parseFloat(e.expectedOutput)
+  const act = parseFloat(e.pendingOutputAegis)
+  if (!isFinite(exp) || exp === 0) return 'large'
+  return `${(((exp - act) / exp) * 100).toFixed(1)}%`
 }
 
 const KEYFRAMES = `

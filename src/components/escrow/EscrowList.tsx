@@ -73,7 +73,6 @@ export function EscrowList({ selectedId, onSelect }: Props) {
             entry={e}
             selected={selectedId === e.id}
             onClick={() => onSelect(e.id)}
-            isExample={entries.length === 0}
           />
         ))}
       </div>
@@ -82,13 +81,13 @@ export function EscrowList({ selectedId, onSelect }: Props) {
 }
 
 function Row({
-  entry, selected, onClick, isExample,
+  entry, selected, onClick,
 }: {
   entry: EscrowHistoryEntry
   selected: boolean
   onClick: () => void
-  isExample: boolean
 }) {
+  const isLive = entry.source === 'live'
   const isClaim = entry.chosenAction === 'BLOCK_AND_CLAIM'
   const accent = isClaim ? '#FF4444' : '#A8FF3E'
   const sf = shortfallPct(entry)
@@ -112,7 +111,16 @@ function Row({
         }}>
           {isClaim ? '✕' : '✓'} {entry.scenario.toUpperCase()}
         </span>
-        {isExample && (
+        {isLive ? (
+          <span style={{
+            fontFamily: "'Press Start 2P', monospace", fontSize: 6,
+            color: '#A8FF3E', letterSpacing: '0.1em',
+            border: '1px solid #A8FF3E', padding: '2px 5px',
+            borderRadius: 3, background: 'rgba(168,255,62,0.08)',
+          }}>
+            LIVE
+          </span>
+        ) : (
           <span style={{
             fontFamily: "'Press Start 2P', monospace", fontSize: 6,
             color: '#FFE600', letterSpacing: '0.1em',

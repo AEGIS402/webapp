@@ -3,27 +3,30 @@ import { ESCROW_DEPLOYMENT, EscrowScenarioId, ChainName } from '../constants/dat
 
 export type FinalEscrowState = 'Pending' | 'Released' | 'ClaimPaid'
 
-export interface BalancePair {
-  before: string
-  after: string
+export interface EscrowBalancesSnapshot {
+  userUsdt: string
+  userAegis: string
+  vaultAegis: string
+  insuranceUsdt: string
+  insuranceAegis: string
 }
 
 export interface EscrowScenarioFixture {
   scenario: EscrowScenarioId
 
   // Inputs
-  amountIn:          string  // human-readable input (USDC for README cases)
-  expectedOutput:    string  // human-readable expected output
-  protectionFeePct:  string  // 0.5
+  amountIn:          string
+  expectedOutput:    string
+  protectionFeePct:  string
 
   // Sandwich-only
-  attackerFrontRunUsdt?: string  // 500000
-  attackerBackRunAegis?: string  // 332610.706184…
+  attackerFrontRunUsdt?: string
+  attackerBackRunAegis?: string
 
   // Tx context
-  chain:           ChainName  // explorer routing
+  chain:           ChainName
   swapTxHash:      string
-  decisionTxHash:  string  // synthetic for replayed mainnet examples
+  decisionTxHash:  string
 
   // Audit
   audit:        AuditReport
@@ -36,22 +39,21 @@ export interface EscrowScenarioFixture {
   finalEscrowState:   FinalEscrowState
 
   // Standard interface fields
-  subject:      string  // user wallet
-  beneficiary:  string  // settlement recipient (= user in demo)
-  policyHash:   string  // computed by hook
-  evidenceHash: string  // keccak256(JSON.stringify(audit))
-  auditor:      string  // ephemeral auditor key
-  vault:        string  // EscrowVault (Sepolia, even for mainnet replay)
-  insurancePool: string // (Sepolia)
+  subject:      string
+  beneficiary:  string
+  policyHash:   string
+  evidenceHash: string
+  auditor:      string
+  vault:        string
+  insurancePool: string
 
-  // Balances (before / after the full scenario)
-  balances: {
-    userUsdt:       BalancePair
-    userAegis:      BalancePair
-    vaultAegis:     BalancePair
-    insuranceUsdt:  BalancePair
-    insuranceAegis: BalancePair
-  }
+  // Live snapshot of relevant balances (post-decision).
+  balances: EscrowBalancesSnapshot
+
+  // Optional narration / explainer (live runs include these).
+  explainer?: string
+  narration?: string[]
+  elapsedMs?: number
 }
 
 const ACTORS = {
@@ -71,9 +73,6 @@ const NORMAL_AUDIT: AuditReport = {
   vulnerabilities: [],
 }
 
-// Synthetic high-severity response for the sandwich victim.
-// (Real Sepolia victim tx settled with expectedOutput=0, so live audit returns
-// info; re-run e2e:escrow:live with E2E_EXPECTED_OUTPUT=99 to get true high.)
 const SANDWICH_AUDIT: AuditReport = {
   model: 'gpt-oss-120b',
   score_version: 'risk-v1',
@@ -101,7 +100,6 @@ const SANDWICH_AUDIT: AuditReport = {
   ],
 }
 
-// Real Sepolia normal protected swap (e2e:escrow:live run).
 export const NORMAL_FIXTURE: EscrowScenarioFixture = {
   scenario: 'normal',
   amountIn:           '100',
@@ -124,15 +122,16 @@ export const NORMAL_FIXTURE: EscrowScenarioFixture = {
   vault:              ESCROW_DEPLOYMENT.vault,
   insurancePool:      ESCROW_DEPLOYMENT.insurancePool,
   balances: {
-    userUsdt:       { before: '10000',          after: '9899.5' },
-    userAegis:      { before: '0',              after: '99.541251236045274067' },
-    vaultAegis:     { before: '0',              after: '0' },
-    insuranceUsdt:  { before: '1000000',        after: '1000000.5' },
-    insuranceAegis: { before: '1000137.074316', after: '1000137.074316' },
+    userUsdt:       '9899.5',
+    userAegis:      '99.541251236045274067',
+    vaultAegis:     '0',
+    insuranceUsdt:  '1000000.5',
+    insuranceAegis: '1000137.074316',
   },
+  explainer:
+    'User submitted protectedExactInputSingle for 100 USDT with expectedOutput=99 AEGIS. The pool returned ~99.54 AEGIS into the escrow. Post-audit returned info; the auditor signed RELEASE and the vault forwarded the AEGIS to the user.',
 }
 
-// Real Sepolia sandwich case: front-run + victim swap + back-run + audit BLOCK_AND_CLAIM.
 export const SANDWICH_FIXTURE: EscrowScenarioFixture = {
   scenario: 'sandwich',
   amountIn:               '100',
@@ -157,12 +156,14 @@ export const SANDWICH_FIXTURE: EscrowScenarioFixture = {
   vault:                  ESCROW_DEPLOYMENT.vault,
   insurancePool:          ESCROW_DEPLOYMENT.insurancePool,
   balances: {
-    userUsdt:       { before: '19799',          after: '19899' },         // pre-claim → post-claim refund
-    userAegis:      { before: '0',              after: '99.541251236045274067' },
-    vaultAegis:     { before: '0',              after: '0' },             // recovered to insurance
-    insuranceUsdt:  { before: '999902.5',       after: '999802.5' },      // -100 refund
-    insuranceAegis: { before: '1000137.074316', after: '1000210.281836' },// +73.21 recovery
+    userUsdt:       '19899',
+    userAegis:      '99.541251236045274067',
+    vaultAegis:     '0',
+    insuranceUsdt:  '999802.5',
+    insuranceAegis: '1000210.281836',
   },
+  explainer:
+    'An attacker front-ran with a 500K USDT swap, pushing the price up. The user’s protected swap then yielded only 73.21 AEGIS against an expected 99 AEGIS — a 26.5% shortfall. The attacker back-ran. Post-audit fired the protected_swap_output_shortfall rule and returned high; the auditor signed BLOCK_AND_CLAIM. InsurancePool refunded the user’s 100 USDT principal and recovered the suspicious AEGIS.',
 }
 
 export const ESCROW_FIXTURES: Record<EscrowScenarioId, EscrowScenarioFixture> = {
