@@ -77,7 +77,7 @@ function EmptyState() {
       fontSize: 11, color: '#5A4A8A', lineHeight: 1.6,
       textAlign: 'center',
     }}>
-      No audits yet. Run a scenario above (<span style={{ color: '#A8FF3E' }}>SCENARIO 1</span> or <span style={{ color: '#FF4444' }}>SCENARIO 2-3</span>) to log a run here.
+      No audits yet.
     </div>
   )
 }

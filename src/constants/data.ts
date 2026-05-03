@@ -27,7 +27,7 @@ export interface DemoTarget {
 export const PRE_AUDIT_TARGETS: DemoTarget[] = [
   {
     id: 'safe',
-    label: 'Aegis402SafeHook',
+    label: 'Safe hook',
     address: '0xc4680Ab74eB4a4F7379016aa7b6044380Ae4C0C0',
     description: 'Safe x402-aware Uniswap v4 hook (Sepolia, verified)',
     color: '#A8FF3E',
@@ -35,7 +35,7 @@ export const PRE_AUDIT_TARGETS: DemoTarget[] = [
   },
   {
     id: 'vulnerable',
-    label: 'Aegis402VulnerableHook',
+    label: 'Vulnerable hook',
     address: '0x70fAA067bE47D8dc839088Dcfc6f9338c07c80C0',
     description: 'Intentionally vulnerable audit benchmark hook (Sepolia, verified)',
     color: '#FF4444',

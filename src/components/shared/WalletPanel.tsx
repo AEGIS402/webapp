@@ -1,6 +1,7 @@
 import { WALLET_DATA } from '../../constants/data'
 import { AgentInterceptModal } from '../agent/AgentInterceptModal'
 import { useAuditModal } from '../../state/auditModal'
+import { useWallet, TOKEN_META, TokenSymbol } from '../../state/wallet'
 
 interface WalletPanelProps {
   escrowActive?: boolean
@@ -9,6 +10,7 @@ interface WalletPanelProps {
 export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
   const w = WALLET_DATA
   const { state } = useAuditModal()
+  const { balances, reset } = useWallet()
   const dim = state.phase !== 'hidden'
 
   return (
@@ -55,17 +57,21 @@ export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
       </Section>
 
       {/* Tokens */}
-      <Section label="TOKENS">
-        {w.tokens.map(tok => (
-          <div key={tok.symbol} style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: '#13102E', border: '1px solid #2D1F5E', borderRadius: 6,
-            padding: '8px 12px', marginBottom: 6,
-          }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: tok.color, width: 44 }}>{tok.symbol}</span>
-            <span style={{ fontSize: 8, color: '#F2E7FF', flex: 1 }}>{tok.amount}</span>
-            <span style={{ fontSize: 8, color: '#5A4A8A' }}>{tok.value}</span>
-          </div>
+      <Section label="TOKENS" rightSlot={
+        <button
+          onClick={reset}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: '#5A4A8A',
+            fontFamily: "'Press Start 2P', monospace", fontSize: 6,
+            letterSpacing: '0.1em',
+          }}
+        >
+          RESET
+        </button>
+      }>
+        {TOKEN_META.map(tok => (
+          <TokenRow key={tok.symbol} symbol={tok.symbol} color={tok.color} priceUsd={tok.priceUsd} balance={balances[tok.symbol]} />
         ))}
       </Section>
 
@@ -116,15 +122,56 @@ export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
   )
 }
 
-function Section({ label, children }: { label?: string; children: React.ReactNode }) {
+function Section({
+  label, rightSlot, children,
+}: {
+  label?: string
+  rightSlot?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div style={{ padding: '10px 14px', borderBottom: '1px solid #2D1F5E' }}>
       {label && (
-        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 6, color: '#5A4A8A', letterSpacing: '0.14em', marginBottom: 8 }}>
-          {label}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 8,
+        }}>
+          <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 6, color: '#5A4A8A', letterSpacing: '0.14em' }}>
+            {label}
+          </span>
+          {rightSlot}
         </div>
       )}
       {children}
     </div>
   )
+}
+
+function TokenRow({ symbol, color, priceUsd, balance }: { symbol: TokenSymbol; color: string; priceUsd: number; balance: number }) {
+  const usd = priceUsd > 0 ? `$${(balance * priceUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—'
+  const amount = formatBalance(balance, symbol)
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      background: '#13102E', border: '1px solid #2D1F5E', borderRadius: 6,
+      padding: '8px 12px', marginBottom: 6,
+    }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color, width: 44 }}>{symbol}</span>
+      <span style={{
+        fontSize: 9, color: '#F2E7FF', flex: 1,
+        fontFamily: "'IBM Plex Mono', monospace",
+        transition: 'color 200ms',
+      }}>
+        {amount}
+      </span>
+      <span style={{ fontSize: 8, color: '#5A4A8A' }}>{usd}</span>
+    </div>
+  )
+}
+
+function formatBalance(n: number, symbol: TokenSymbol): string {
+  if (n === 0) return '0'
+  if (symbol === 'WETH') return n.toLocaleString('en-US', { maximumFractionDigits: 4 })
+  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  return n.toLocaleString('en-US', { maximumFractionDigits: 4 })
 }

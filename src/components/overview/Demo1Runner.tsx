@@ -6,6 +6,9 @@ import { PreflightResponse, Severity } from '../../types/preaudit'
 import { MonitorCard, MonitorCardConfig, LogLine } from './MonitorCard'
 import { useAuditModal } from '../../state/auditModal'
 import { useAuditHistory } from '../../state/auditHistory'
+import { useWallet } from '../../state/wallet'
+
+const X402_PAYMENT_USDC = 0.001
 
 type Phase = 'idle' | 'running' | 'done' | 'error'
 
@@ -32,6 +35,7 @@ export function Demo1Runner() {
   modalRef.current = modal
 
   const history = useAuditHistory()
+  const wallet = useWallet()
 
   const clearAllTimers = () => {
     timersRef.current.forEach(clearTimeout)
@@ -129,7 +133,13 @@ export function Demo1Runner() {
         target, result: res, elapsedSec: finalElapsed,
         cached: !!cached, source: 'live',
       })
-      appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s`, color: '#5A4A8A' })
+      // Agent signs the x402 payment when audit allows it.
+      if (res.verdict === 'safe') {
+        wallet.deduct('USDC', X402_PAYMENT_USDC)
+        appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s · wallet -${X402_PAYMENT_USDC} USDC`, color: '#5A4A8A' })
+      } else {
+        appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s · payment not signed`, color: '#5A4A8A' })
+      }
       appendVerdictLogs(res, appendLog)
     } catch (err) {
       if (controller.signal.aborted) return

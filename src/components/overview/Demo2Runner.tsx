@@ -9,6 +9,8 @@ import { PostAuditReport, Severity } from '../../types/postaudit'
 import { MonitorCard, MonitorCardConfig, LogLine } from './MonitorCard'
 import { useAuditModal } from '../../state/auditModal'
 import { useAuditHistory } from '../../state/auditHistory'
+import { useWallet } from '../../state/wallet'
+import { ESCROW_FIXTURES } from '../../data/escrow-fixtures'
 
 type Phase = 'idle' | 'running' | 'done' | 'error'
 
@@ -35,6 +37,7 @@ export function Demo2Runner() {
   modalRef.current = modal
 
   const history = useAuditHistory()
+  const wallet = useWallet()
 
   const clearAllTimers = () => {
     timersRef.current.forEach(clearTimeout)
@@ -146,7 +149,11 @@ export function Demo2Runner() {
         cached: !!cached,
         source: 'live',
       })
-      appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s`, color: '#5A4A8A' })
+      // Reflect the swap that already settled on-chain in the wallet panel.
+      const fixture = ESCROW_FIXTURES[target.id]
+      const inputCharge = parseFloat(fixture.amountIn) * (1 + parseFloat(fixture.protectionFeePct) / 100)
+      wallet.deduct('USDT', inputCharge)
+      appendLog({ ts: tsNow(), text: `   ← response received in ${finalElapsed}s · wallet -${inputCharge.toFixed(2)} USDT (swap input + fee)`, color: '#5A4A8A' })
       appendVerdictLogs(res, appendLog)
     } catch (err) {
       if (controller.signal.aborted) return

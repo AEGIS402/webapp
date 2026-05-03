@@ -15,7 +15,6 @@ export default defineConfig(({ mode }) => {
           target: PRE_AUDIT_TARGET,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/preaudit/, ''),
-          // pre-audit LLM round trip can take >1 min
           timeout: 600_000,
           proxyTimeout: 600_000,
         },
@@ -23,7 +22,6 @@ export default defineConfig(({ mode }) => {
           target: POST_AUDIT_TARGET,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/postaudit/, ''),
-          // post-audit LLM round trip can exceed 2 minutes
           timeout: 600_000,
           proxyTimeout: 600_000,
         },
