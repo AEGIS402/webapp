@@ -2,36 +2,47 @@ import { useState } from 'react'
 import { BadgeColor } from '../constants/data'
 import { DashboardLayout } from './DashboardLayout'
 import { MonitorCard, OverviewState } from '../components/overview/MonitorCard'
-import { LiveFeed } from '../components/overview/LiveFeed'
+import { Demo1Runner } from '../components/overview/Demo1Runner'
+import { AuditHistory } from '../components/overview/AuditHistory'
 
-const SCENARIOS: { state: OverviewState; label: string; badge: BadgeColor; color: string }[] = [
-  { state: 'processing', label: 'SCENARIO 1 · PROCESSING', badge: 'green',  color: '#378ADD' },
-  { state: 'blocked',    label: 'SCENARIO 1 · BLOCKED',    badge: 'red',    color: '#FF4444' },
-  { state: 'slippage',   label: 'SCENARIO 2 · SLIPPAGE',   badge: 'yellow', color: '#FFE600' },
+type ScenarioId = 'pre-audit' | 'slippage'
+
+interface ScenarioMeta {
+  id: ScenarioId
+  label: string
+  badge: BadgeColor
+  color: string
+}
+
+const SCENARIOS: ScenarioMeta[] = [
+  { id: 'pre-audit', label: 'SCENARIO 1 · PRE-AUDIT (LIVE)', badge: 'green',  color: '#A8FF3E' },
+  { id: 'slippage',  label: 'SCENARIO 2 · SLIPPAGE (MOCK)',  badge: 'yellow', color: '#FFE600' },
 ]
 
 export function Overview() {
-  const [state, setState] = useState<OverviewState>('processing')
-  const cfg = SCENARIOS.find(s => s.state === state)!
-  const escrowActive = state === 'slippage'
+  const [scenario, setScenario] = useState<ScenarioId>('pre-audit')
+  const meta = SCENARIOS.find(s => s.id === scenario)!
+  const escrowActive = scenario === 'slippage'
 
   return (
     <DashboardLayout
       title="Overview"
       subtitle="Agent Developer · jawgstar.eth"
-      badgeColor={cfg.badge}
+      badgeColor={meta.badge}
       escrowActive={escrowActive}
     >
-      <ScenarioToggle current={state} onChange={setState} />
-      <MonitorCard state={state} />
-      <LiveFeed state={state} />
+      <ScenarioToggle current={scenario} onChange={setScenario} />
+      {scenario === 'pre-audit' ? <Demo1Runner /> : <ScenarioMockView state="slippage" />}
+      <div style={{ marginTop: 12 }}>
+        <AuditHistory />
+      </div>
     </DashboardLayout>
   )
 }
 
 interface ScenarioToggleProps {
-  current: OverviewState
-  onChange: (s: OverviewState) => void
+  current: ScenarioId
+  onChange: (s: ScenarioId) => void
 }
 
 function ScenarioToggle({ current, onChange }: ScenarioToggleProps) {
@@ -49,11 +60,11 @@ function ScenarioToggle({ current, onChange }: ScenarioToggleProps) {
         DEMO STATE
       </span>
       {SCENARIOS.map(s => {
-        const active = current === s.state
+        const active = current === s.id
         return (
           <button
-            key={s.state}
-            onClick={() => onChange(s.state)}
+            key={s.id}
+            onClick={() => onChange(s.id)}
             style={{
               flex: 1, height: 32, cursor: 'pointer',
               background: active ? `${s.color}22` : 'transparent',
@@ -71,4 +82,8 @@ function ScenarioToggle({ current, onChange }: ScenarioToggleProps) {
       })}
     </div>
   )
+}
+
+function ScenarioMockView({ state }: { state: OverviewState }) {
+  return <MonitorCard state={state} />
 }

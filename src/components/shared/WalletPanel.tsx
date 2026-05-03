@@ -1,4 +1,6 @@
 import { WALLET_DATA } from '../../constants/data'
+import { AgentInterceptModal } from '../agent/AgentInterceptModal'
+import { useAuditModal } from '../../state/auditModal'
 
 interface WalletPanelProps {
   escrowActive?: boolean
@@ -6,11 +8,22 @@ interface WalletPanelProps {
 
 export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
   const w = WALLET_DATA
+  const { state } = useAuditModal()
+  const dim = state.phase !== 'hidden'
+
   return (
     <div style={{
-      width: 300, flexShrink: 0, height: '100%', overflowY: 'auto',
+      width: 300, flexShrink: 0, height: '100%',
       background: '#0E0B22', borderLeft: '1px solid #2D1F5E',
+      position: 'relative',
     }}>
+      <div style={{
+        position: 'absolute', inset: 0, overflowY: 'auto',
+        opacity: dim ? 0.18 : 1,
+        filter: dim ? 'blur(1px) saturate(0.7)' : 'none',
+        transition: 'opacity 220ms, filter 220ms',
+        pointerEvents: dim ? 'none' : 'auto',
+      }}>
       {/* Header */}
       <div style={{
         height: 44, background: '#13102E', borderBottom: '1px solid #2D1F5E',
@@ -96,6 +109,9 @@ export function WalletPanel({ escrowActive = false }: WalletPanelProps) {
           <div style={{ fontSize: 8 }}>{escrowActive ? '⚠ 1 escrow hold active' : '● ACTIVE — 0 threats'}</div>
         </div>
       </Section>
+      </div>
+
+      <AgentInterceptModal />
     </div>
   )
 }
