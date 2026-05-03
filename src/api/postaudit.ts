@@ -1,7 +1,9 @@
 import type { PostAuditReport } from '../types/postaudit'
 
 const POST_AUDIT_BASE: string =
-  import.meta.env.VITE_POSTAUDIT_URL ?? '/api/postaudit'
+  import.meta.env.VITE_POSTAUDIT_URL
+  ?? import.meta.env.VITE_POSTAUDIT_PROXY
+  ?? '/api/postaudit'
 
 export interface PostAuditOptions {
   signal?: AbortSignal
