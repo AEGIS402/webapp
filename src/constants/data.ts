@@ -62,7 +62,7 @@ export const POST_AUDIT_TARGETS: PostAuditTarget[] = [
   {
     id: 'normal',
     label: 'Normal protected swap',
-    txHash: '0x9c55902631bed51d5a37e205a0eb1fd86eb84be0f7293c6aaf6161b86869e946',
+    txHash: '0xfdbb579cbf295c76a8bfeadd70553ead926461a9d41451b62ba8d6c54e30bf12',
     description: '100 USDT → ~99.5 AEGIS via protectedExactInputSingle (Sepolia)',
     context: 'Clean execution. Audit should return info → escrow RELEASE.',
     color: '#A8FF3E',
@@ -71,7 +71,7 @@ export const POST_AUDIT_TARGETS: PostAuditTarget[] = [
   {
     id: 'sandwich',
     label: 'Sandwich victim swap',
-    txHash: '0xbb146dc17fcce5294bb67fd3eebc57822ba157bb58e8b2c601006e5b3202c39e',
+    txHash: '0xaa4b83fab1d251fe768a37a81ace444ef5b34c75ec9e6f35f70c93388d9348f0',
     description: 'Victim 100 USDT → 73 AEGIS after MEV front-run + back-run (Sepolia)',
     context: 'Output 26% short. Mock fallback used because the on-chain victim swap was settled with expectedOutput=0; re-run e2e with E2E_EXPECTED_OUTPUT=99 for true live high verdict.',
     color: '#FF4444',
