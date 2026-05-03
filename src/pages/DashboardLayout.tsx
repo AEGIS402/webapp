@@ -1,11 +1,9 @@
-import { Screen, BadgeColor } from '../constants/data'
+import { BadgeColor } from '../constants/data'
 import { Sidebar } from '../components/shared/Sidebar'
 import { Topbar } from '../components/shared/Topbar'
 import { WalletPanel } from '../components/shared/WalletPanel'
 
 interface DashboardLayoutProps {
-  screen: Screen
-  navigate: (s: Screen) => void
   title: string
   subtitle: string
   badgeColor?: BadgeColor
@@ -14,11 +12,11 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({
-  screen, navigate, title, subtitle, badgeColor = 'green', escrowActive = false, children,
+  title, subtitle, badgeColor = 'green', escrowActive = false, children,
 }: DashboardLayoutProps) {
   return (
     <div style={{ display: 'flex', width: '100%', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-      <Sidebar screen={screen} navigate={navigate} />
+      <Sidebar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <Topbar title={title} subtitle={subtitle} badgeColor={badgeColor} />
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

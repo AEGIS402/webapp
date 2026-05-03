@@ -1,4 +1,5 @@
-import { Screen, PipelineNodeState } from '../../constants/data'
+import { useNavigate } from 'react-router-dom'
+import { PipelineNodeState } from '../../constants/data'
 import { StatusPill } from '../shared/StatusPill'
 import { Pipeline } from './Pipeline'
 
@@ -16,7 +17,7 @@ interface MonitorCardConfig {
   nodes: PipelineNodeState[]
   connectors: ('green' | 'blue' | 'gray' | 'red')[]
   logs: LogLine[]
-  link?: { text: string; screen: Screen }
+  link?: { text: string; to: string }
 }
 
 const CONFIGS: Record<OverviewState, MonitorCardConfig> = {
@@ -55,16 +56,16 @@ const CONFIGS: Record<OverviewState, MonitorCardConfig> = {
       { ts: '',         text: '   expected: ≥ 0.000950 USDC · actual: 0.000310 USDC', color: '#FFE600' },
       { ts: '',         text: '   slippage: 67.4% · threshold: 5.0% → ESCROW HOLD triggered', color: '#FF4444' },
     ],
-    link: { text: '→ View Post-Audit Report', screen: 'audit-post' },
+    link: { text: '→ View Post-Audit Report', to: '/audit/post' },
   },
 }
 
 interface MonitorCardProps {
   state: OverviewState
-  navigate: (s: Screen) => void
 }
 
-export function MonitorCard({ state, navigate }: MonitorCardProps) {
+export function MonitorCard({ state }: MonitorCardProps) {
+  const navigate = useNavigate()
   const cfg = CONFIGS[state]
   return (
     <div style={{
@@ -103,7 +104,7 @@ export function MonitorCard({ state, navigate }: MonitorCardProps) {
           ))}
           {cfg.link && (
             <span
-              onClick={() => navigate(cfg.link!.screen)}
+              onClick={() => navigate(cfg.link!.to)}
               style={{ color: '#FFE600', cursor: 'pointer', fontSize: 9, textDecoration: 'underline', display: 'block', paddingLeft: 68, marginTop: 4 }}
             >
               {cfg.link.text}

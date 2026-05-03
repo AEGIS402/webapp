@@ -1,34 +1,29 @@
-import { Screen } from '../constants/data'
 import { DashboardLayout } from './DashboardLayout'
 import { AuditList } from '../components/audit/AuditList'
 import { VaultCards } from '../components/escrow/VaultCards'
 import { HookGrid } from '../components/integrations/HookGrid'
 
-interface PageProps {
-  navigate: (s: Screen) => void
+interface AuditPageProps {
+  initialTab?: 'pre' | 'post'
 }
 
-export function AuditPage({ navigate, initialTab = 'pre' }: PageProps & { initialTab?: 'pre' | 'post' }) {
+export function AuditPage({ initialTab = 'pre' }: AuditPageProps) {
   const isPost = initialTab === 'post'
   return (
     <DashboardLayout
-      screen={isPost ? 'audit-post' : 'audit-pre'}
-      navigate={navigate}
       title="Audit"
       subtitle={isPost ? 'Post-Audit Analysis · Slippage Detection' : 'Contract Audit Log · Local LLM'}
       badgeColor={isPost ? 'yellow' : 'green'}
       escrowActive={isPost}
     >
-      <AuditList initialTab={initialTab} navigate={navigate} />
+      <AuditList initialTab={initialTab} />
     </DashboardLayout>
   )
 }
 
-export function EscrowPage({ navigate }: PageProps) {
+export function EscrowPage() {
   return (
     <DashboardLayout
-      screen="escrow"
-      navigate={navigate}
       title="Escrow"
       subtitle="Conditional Settlement · Post-Audit Hold"
       badgeColor="yellow"
@@ -39,11 +34,9 @@ export function EscrowPage({ navigate }: PageProps) {
   )
 }
 
-export function IntegrationsPage({ navigate }: PageProps) {
+export function IntegrationsPage() {
   return (
     <DashboardLayout
-      screen="integrations"
-      navigate={navigate}
       title="Integrations"
       subtitle="Hook Registry · x402 Connections"
       badgeColor="green"

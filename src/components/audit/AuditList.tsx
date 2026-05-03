@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { AUDIT_PRE_ROWS, AUDIT_POST_ROWS, Screen } from '../../constants/data'
+import { AUDIT_PRE_ROWS, AUDIT_POST_ROWS } from '../../constants/data'
 import { StatusPill } from '../shared/StatusPill'
 
 interface AuditListProps {
   initialTab?: 'pre' | 'post'
-  navigate: (s: Screen) => void
 }
 
-export function AuditList({ initialTab = 'pre', navigate }: AuditListProps) {
+export function AuditList({ initialTab = 'pre' }: AuditListProps) {
   const [tab, setTab] = useState<'pre' | 'post'>(initialTab)
   const [expanded, setExpanded] = useState<string | null>(
     initialTab === 'post' ? '0xF7c3...9d1a' : '0xA4f2...8c3d'

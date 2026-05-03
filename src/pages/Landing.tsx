@@ -1,19 +1,17 @@
-import { Screen } from '../constants/data'
+import { useNavigate } from 'react-router-dom'
+import { NAV_ITEMS } from '../constants/data'
 import { LogoFull, LogoMark } from '../components/shared/Logo'
 
-interface LandingProps {
-  navigate: (s: Screen) => void
-}
-
-export function Landing({ navigate }: LandingProps) {
+export function Landing() {
+  const navigate = useNavigate()
   return (
     <div style={{ width: '100%', height: '100vh', background: '#0A0818', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Navbar */}
       <nav style={{ height: 56, background: '#0E0B22', borderBottom: '1px solid #2D1F5E', display: 'flex', alignItems: 'center', padding: '0 32px', gap: 20, flexShrink: 0 }}>
-        <LogoFull size={26} onClick={() => navigate('landing')} />
+        <LogoFull size={26} onClick={() => navigate('/')} />
         <div style={{ display: 'flex', gap: 28, marginLeft: 'auto' }}>
-          {['OVERVIEW','AUDIT','ESCROW','INTEGRATIONS'].map(label => (
-            <span key={label} onClick={() => navigate(label.toLowerCase() as Screen)} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 7, color: '#5A4A8A', cursor: 'pointer', letterSpacing: '0.06em' }}>{label}</span>
+          {NAV_ITEMS.map(item => (
+            <span key={item.to} onClick={() => navigate(item.to)} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 7, color: '#5A4A8A', cursor: 'pointer', letterSpacing: '0.06em' }}>{item.label}</span>
           ))}
         </div>
         <div style={{ marginLeft: 16, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 4, background: 'rgba(46,122,0,0.2)', border: '1px solid #A8FF3E', fontFamily: "'Press Start 2P', monospace", fontSize: 7, color: '#A8FF3E', letterSpacing: '0.1em' }}>
@@ -36,10 +34,10 @@ export function Landing({ navigate }: LandingProps) {
           <p style={{ fontSize: 13, color: '#9B8EC4', lineHeight: 1.8, marginBottom: 8 }}>Security layer for x402 payment flows.</p>
           <p style={{ fontSize: 10, color: '#5A4A8A', lineHeight: 1.8, marginBottom: 28 }}>Hook Contract Audit · Post-Audit Slippage Detection · Escrow Hold</p>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={() => navigate('overview')} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 9, color: '#A8FF3E', background: 'rgba(46,122,0,0.2)', border: '2px solid #A8FF3E', borderRadius: 4, padding: '12px 20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
+            <button onClick={() => navigate('/overview')} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 9, color: '#A8FF3E', background: 'rgba(46,122,0,0.2)', border: '2px solid #A8FF3E', borderRadius: 4, padding: '12px 20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
               ▶ INSERT COIN
             </button>
-            <button onClick={() => navigate('overview')} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 9, color: '#9B8EC4', background: 'transparent', border: '1px solid #2D1F5E', borderRadius: 4, padding: '12px 20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
+            <button onClick={() => navigate('/overview')} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 9, color: '#9B8EC4', background: 'transparent', border: '1px solid #2D1F5E', borderRadius: 4, padding: '12px 20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
               VIEW DEMO
             </button>
           </div>

@@ -1,22 +1,18 @@
-export type Screen =
-  | 'landing'
-  | 'overview'
-  | 'overview-blocked'
-  | 'overview-slippage'
-  | 'audit-pre'
-  | 'audit-post'
-  | 'escrow'
-  | 'integrations'
-
 export type StatusType = 'ALLOW' | 'BLOCK' | 'WARN' | 'HOLD' | 'PASS' | 'CACHE' | 'PROCESSING' | 'BLOCKED' | 'SLIPPAGE'
 export type PipelineNodeState = 'done' | 'active' | 'wait' | 'block' | 'warn'
 export type BadgeColor = 'green' | 'yellow' | 'red'
 
-export const NAV_ITEMS = [
-  { id: 'overview'      as Screen, label: 'OVERVIEW' },
-  { id: 'audit-pre'     as Screen, label: 'AUDIT' },
-  { id: 'escrow'        as Screen, label: 'ESCROW' },
-  { id: 'integrations'  as Screen, label: 'INTEGRATIONS' },
+export interface NavItem {
+  to: string
+  label: string
+  match: string
+}
+
+export const NAV_ITEMS: NavItem[] = [
+  { to: '/overview',     label: 'OVERVIEW',     match: '/overview' },
+  { to: '/audit/pre',    label: 'AUDIT',        match: '/audit' },
+  { to: '/escrow',       label: 'ESCROW',       match: '/escrow' },
+  { to: '/integrations', label: 'INTEGRATIONS', match: '/integrations' },
 ]
 
 export const WALLET_DATA = {

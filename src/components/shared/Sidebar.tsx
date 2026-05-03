@@ -1,16 +1,10 @@
-import { Screen, NAV_ITEMS } from '../../constants/data'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { NAV_ITEMS } from '../../constants/data'
 import { LogoFull } from './Logo'
 
-interface SidebarProps {
-  screen: Screen
-  navigate: (s: Screen) => void
-}
-
-export function Sidebar({ screen, navigate }: SidebarProps) {
-  const activeKey: Screen =
-    screen.startsWith('audit') ? 'audit-pre' :
-    screen.startsWith('overview') ? 'overview' :
-    screen
+export function Sidebar() {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
 
   return (
     <div style={{
@@ -23,17 +17,17 @@ export function Sidebar({ screen, navigate }: SidebarProps) {
         height: 56, background: '#13102E', borderBottom: '1px solid #2D1F5E',
         display: 'flex', alignItems: 'center', padding: '0 14px', flexShrink: 0,
       }}>
-        <LogoFull size={24} onClick={() => navigate('landing')} />
+        <LogoFull size={24} onClick={() => navigate('/')} />
       </div>
 
       {/* Nav */}
       <div style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
         {NAV_ITEMS.map(item => {
-          const active = activeKey === item.id
+          const active = pathname.startsWith(item.match)
           return (
-            <div
-              key={item.id}
-              onClick={() => navigate(item.id)}
+            <Link
+              key={item.to}
+              to={item.to}
               style={{
                 height: 36, display: 'flex', alignItems: 'center',
                 padding: '0 24px', cursor: 'pointer', position: 'relative',
@@ -41,6 +35,7 @@ export function Sidebar({ screen, navigate }: SidebarProps) {
                 fontSize: 7, letterSpacing: '0.08em',
                 color: active ? '#7F77DD' : '#5A4A8A',
                 background: active ? 'rgba(127,119,221,0.12)' : 'transparent',
+                textDecoration: 'none',
                 transition: 'color 0.15s',
               }}
             >
@@ -51,7 +46,7 @@ export function Sidebar({ screen, navigate }: SidebarProps) {
                 }} />
               )}
               {item.label}
-            </div>
+            </Link>
           )
         })}
       </div>
